@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+{% block title %}{{ store.name|default:store.domain }} — Shopify CRM{% endblock %}
+{% block nav_stores %}active{% endblock %}
+{% block page_title %}{{ store.name|default:store.domain }}{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav class="mb-3">
+  <small>
+    <a href="{% url 'stores:store_list' %}" class="text-muted text-decoration-none">
+      <i class="bi bi-shop me-1"></i>Store
+    </a>
+    <span class="text-muted mx-1">/</span>
+    <span>{{ store.name|default:store.domain }}</span>
+  </small>
+</nav>
+
+<div class="row g-4">
+
+  <!-- Colonna sinistra -->
+  <div class="col-lg-4">
+
+    <!-- Card principale -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <h5 class="fw-bold mb-1">{{ store.name|default:"—" }}</h5>
+            <small class="text-muted">{{ store.domain }}</small>
+          </div>
+          <span class="badge badge-{{ store.status }} rounded-pill px-2">
+            {{ store.get_status_display }}
+          </span>
+        </div>
+
+        <a href="{{ store.url }}" target="_blank"
+           class="btn btn-sm btn-outline-primary w-100 mb-2">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Apri store
+        </a>
+
+        <!-- Bottoni analisi -->
+        {% if store.status == 'new' %}
+        <!-- Store non ancora analizzato: mostra solo Analizza -->
+        <form method="post" action="{% url 'analyzer:analyze_store' store.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success w-100 mb-2"
+                  onclick="return confirmAnalyze(this)">
+            <i class="bi bi-play-circle me-1"></i>Analizza store
+          </button>
+        </form>
+        {% else %}
+        <!-- Store già analizzato: mostra solo Rianalizza -->
+        <form method="post" action="{% url 'analyzer:analyze_store' store.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-success w-100 mb-2"
+                  onclick="return confirmAnalyze(this)">
+            <i class="bi bi-arrow-clockwise me-1"></i>Rianalizza
+          </button>
+        </form>
+        {% endif %}
+
+        <div class="d-flex flex-column gap-2 mt-3" style="font-size:13px">
+          <div class="d-flex justify-content-between">
+            <span class="text-muted">Nicchia</span>
+            <span>{{ store.get_niche_display }}</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span class="text-muted">Scoperto il</span>
+            <span>{{ store.discovered_at|date:"d/m/Y" }}</span>
+          </div>
+          {% if latest %}
+          <div class="d-flex justify-content-between">
+            <span class="text-muted">Lead Score</span>
+            <span class="fw-bold {% if latest.lead_score >= 70 %}text-danger{% elif latest.lead_score >= 50 %}text-warning{% else %}text-secondary{% endif %}">
+              {{ latest.lead_score }}/100
+            </span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span class="text-muted">Priorita</span>
+            <span class="fw-semibold">{{ latest.lead_priority }}</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span class="text-muted">Potenziale</span>
+            <span>{{ latest.lead_potential }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Contatti -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-person-lines-fill me-2"></i>Contatti</h6>
+      </div>
+      <div class="card-body d-flex flex-column gap-2" style="font-size:13px">
+        <div>
+          <div class="text-muted small mb-1">Email</div>
+          {% if store.email %}
+            <a href="mailto:{{ store.email }}" class="text-decoration-none">{{ store.email }}</a>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </div>
+        <div>
+          <div class="text-muted small mb-1">Telefono</div>
+          <div>{{ store.phone|default:"—" }}</div>
+        </div>
+        <div>
+          <div class="text-muted small mb-1">P.IVA</div>
+          <div>{{ store.piva|default:"—" }}</div>
+        </div>
+        <div>
+          <div class="text-muted small mb-1">Indirizzo</div>
+          <div>{{ store.address|default:"—" }}</div>
+        </div>
+        {% if store.instagram or store.facebook or store.tiktok or store.linkedin %}
+        <div>
+          <div class="text-muted small mb-1">Social</div>
+          <div class="d-flex gap-2 flex-wrap">
+            {% if store.instagram %}
+            <a href="{{ store.instagram }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+              <i class="bi bi-instagram"></i>
+            </a>
+            {% endif %}
+            {% if store.facebook %}
+            <a href="{{ store.facebook }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+              <i class="bi bi-facebook"></i>
+            </a>
+            {% endif %}
+            {% if store.tiktok %}
+            <a href="{{ store.tiktok }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+              <i class="bi bi-tiktok"></i>
+            </a>
+            {% endif %}
+            {% if store.linkedin %}
+            <a href="{{ store.linkedin }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+              <i class="bi bi-linkedin"></i>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-sticky me-2"></i>Note</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-0">{{ store.notes|default:"Nessuna nota." }}</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Colonna destra -->
+  <div class="col-lg-8">
+
+    <!-- Analisi -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-graph-up me-2"></i>Analisi</h6>
+        <small class="text-muted">{{ analyses.count }} totali</small>
+      </div>
+      <div class="card-body p-0">
+        {% if analyses %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Data</th>
+              <th>Lead Score</th>
+              <th>Prodotti</th>
+              <th>Prezzo medio</th>
+              <th>Immagini</th>
+              <th>Report</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in analyses %}
+            <tr>
+              <td class="ps-3"><small>{{ a.created_at|date:"d/m/Y H:i" }}</small></td>
+              <td>
+                <span class="fw-bold {% if a.lead_score >= 70 %}text-danger{% elif a.lead_score >= 50 %}text-warning{% else %}text-secondary{% endif %}">
+                  {{ a.lead_score }}/100
+                </span>
+                <small class="text-muted ms-1">{{ a.lead_priority }}</small>
+              </td>
+              <td><small>{{ a.product_count }}</small></td>
+              <td><small>€{{ a.price_avg }}</small></td>
+              <td>
+                <small class="{% if a.img_quality_score < 50 %}text-danger{% elif a.img_quality_score < 70 %}text-warning{% else %}text-success{% endif %}">
+                  {{ a.img_quality_score }}/100
+                </small>
+              </td>
+              <td>
+                {% if a.report_file %}
+                <a href="/media/reports/{{ a.report_file }}" target="_blank"
+                   class="btn btn-sm btn-outline-primary py-0 px-2">
+                  <i class="bi bi-file-earmark-text"></i>
+                </a>
+                {% else %}
+                <small class="text-muted">—</small>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-graph-up fs-2 d-block mb-2 opacity-25"></i>
+          <p class="mb-3 small">Nessuna analisi ancora.</p>
+          <form method="post" action="{% url 'analyzer:analyze_store' store.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success btn-sm"
+                    onclick="return confirmAnalyze(this)">
+              <i class="bi bi-play-circle me-1"></i>Analizza ora
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Log contatti -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-envelope me-2"></i>Log Contatti</h6>
+        <small class="text-muted">{{ contacts.count }} totali</small>
+      </div>
+      <div class="card-body p-0">
+        {% if contacts %}
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Data</th>
+              <th>Tipo</th>
+              <th>Esito</th>
+              <th>Oggetto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in contacts %}
+            <tr>
+              <td class="ps-3"><small>{{ log.sent_at|date:"d/m/Y" }}</small></td>
+              <td><small>{{ log.get_contact_type_display }}</small></td>
+              <td>
+                <span class="badge rounded-pill px-2
+                  {% if log.outcome == 'replied' or log.outcome == 'interested' %}bg-success
+                  {% elif log.outcome == 'rejected' or log.outcome == 'bounced' %}bg-danger
+                  {% else %}bg-secondary{% endif %}
+                  bg-opacity-75" style="font-size:10px">
+                  {{ log.get_outcome_display }}
+                </span>
+              </td>
+              <td><small class="text-muted">{{ log.subject|default:"—" }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-envelope fs-2 d-block mb-2 opacity-25"></i>
+          <small>Nessun contatto ancora. Verra aggiunto nel Step 6.</small>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmAnalyze(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi in corso...';
+  return true;
+}
+</script>
+{% endblock %}

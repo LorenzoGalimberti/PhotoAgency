@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}Ricerca Selenium — Shopify CRM{% endblock %}
+{% block nav_import %}active{% endblock %}
+{% block page_title %}Ricerca Automatica Selenium{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Form -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-robot me-2"></i>Avvia ricerca store
+        </h6>
+      </div>
+      <div class="card-body">
+
+        <div class="alert alert-warning py-2 px-3 mb-3" style="font-size:13px">
+          <i class="bi bi-clock me-1"></i>
+          <strong>Attenzione:</strong> la ricerca può richiedere qualche minuto.
+          La pagina rimarrà in attesa fino al completamento.
+        </div>
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.queries.label }}</label>
+            {{ form.queries }}
+            <div class="form-text">{{ form.queries.help_text }}</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.niche.label }}</label>
+            {{ form.niche }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.source_label.label }}</label>
+            {{ form.source_label }}
+            <div class="form-text">{{ form.source_label.help_text }}</div>
+          </div>
+
+          <div class="mb-4">
+            <div class="form-check">
+              {{ form.headless }}
+              <label class="form-check-label" for="{{ form.headless.id_for_label }}">
+                {{ form.headless.label }}
+              </label>
+              <div class="form-text">{{ form.headless.help_text }}</div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100" id="btn-avvia">
+            <i class="bi bi-play-circle me-2"></i>Avvia ricerca
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-info-circle me-2"></i>Come funziona</h6>
+      </div>
+      <div class="card-body" style="font-size:13px">
+        <ol class="mb-0 ps-3">
+          <li class="mb-1">Django lancia lo script Selenium in background</li>
+          <li class="mb-1">Chrome apre Google e cerca ogni query</li>
+          <li class="mb-1">Gli URL trovati vengono salvati in <code>media/selenium_output.txt</code></li>
+          <li class="mb-1">Django importa automaticamente i risultati nel DB</li>
+          <li>Gli store già presenti vengono saltati (deduplicazione automatica)</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- Risultato -->
+  <div class="col-lg-6">
+    {% if import_result %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-clipboard-check me-2"></i>Risultato importazione
+        </h6>
+      </div>
+      <div class="card-body">
+
+        <div class="row g-2 mb-4">
+          <div class="col-4">
+            <div class="text-center p-3 rounded" style="background:#f0fdf4">
+              <div class="fw-bold fs-4 text-success">{{ import_result.imported|length }}</div>
+              <small class="text-muted">Nuovi</small>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="text-center p-3 rounded" style="background:#eff6ff">
+              <div class="fw-bold fs-4 text-primary">{{ import_result.skipped|length }}</div>
+              <small class="text-muted">Già presenti</small>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="text-center p-3 rounded" style="background:#fff7ed">
+              <div class="fw-bold fs-4 text-warning">{{ import_result.total_found }}</div>
+              <small class="text-muted">Trovati</small>
+            </div>
+          </div>
+        </div>
+
+        {% if import_result.imported %}
+        <h6 class="fw-semibold mb-2 text-success">
+          <i class="bi bi-check-circle me-1"></i>
+          Store importati ({{ import_result.imported|length }})
+        </h6>
+        <div style="max-height:250px; overflow-y:auto" class="mb-3">
+          {% for url in import_result.imported %}
+          <div class="d-flex align-items-center gap-2 py-1 border-bottom">
+            <i class="bi bi-shop text-success small"></i>
+            <small class="text-break">{{ url }}</small>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if import_result.skipped %}
+        <h6 class="fw-semibold mb-2 text-primary">
+          <i class="bi bi-skip-forward me-1"></i>
+          Già presenti ({{ import_result.skipped|length }})
+        </h6>
+        <div style="max-height:120px; overflow-y:auto" class="mb-3">
+          {% for url in import_result.skipped %}
+          <div class="py-1 border-bottom">
+            <small class="text-muted text-break">{{ url }}</small>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <a href="{% url 'stores:dashboard' %}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Torna alla dashboard
+        </a>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body d-flex flex-column align-items-center justify-content-center text-center py-5">
+        <i class="bi bi-robot fs-1 text-muted opacity-25 mb-3"></i>
+        <p class="text-muted mb-0">Il risultato apparirà qui dopo l'esecuzione.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Mostra spinner sul bottone durante l'attesa
+  document.querySelector('form').addEventListener('submit', function () {
+    const btn = document.getElementById('btn-avvia');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Ricerca in corso...';
+  });
+</script>
+{% endblock %}

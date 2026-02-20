@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Shopify CRM{% endblock %}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root { --sidebar-w: 240px; --accent: #7c3aed; }
+  body { background: #f8f9fc; font-family: 'Segoe UI', sans-serif; }
+  .sidebar { width: var(--sidebar-w); min-height: 100vh; background: #1e1b2e;
+    color: #c4b5fd; position: fixed; top: 0; left: 0;
+    display: flex; flex-direction: column; z-index: 100; }
+  .sidebar-brand { padding: 24px 20px 16px; border-bottom: 1px solid #2d2840; }
+  .sidebar-brand h5 { color: #fff; font-weight: 700; margin: 0; font-size: 15px; }
+  .sidebar-brand small { color: #9ca3af; font-size: 11px; }
+  .sidebar-nav { padding: 16px 0; flex: 1; }
+  .nav-section-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: #6b6b80; padding: 8px 20px 4px; }
+  .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+    color: #a78bfa; text-decoration: none; font-size: 13px;
+    border-left: 3px solid transparent; transition: all .15s; }
+  .sidebar-link:hover, .sidebar-link.active {
+    background: rgba(124,58,237,.15); color: #fff; border-left-color: var(--accent); }
+  .sidebar-link i { font-size: 15px; width: 18px; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid #2d2840; }
+  .main-wrap { margin-left: var(--sidebar-w); min-height: 100vh; }
+  .topbar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 14px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 50; }
+  .topbar-title { font-weight: 600; font-size: 17px; color: #111; }
+  .page-content { padding: 28px; }
+  .badge-new       { background: #ede9fe; color: #7c3aed; }
+  .badge-analyzed  { background: #cffafe; color: #0e7490; }
+  .badge-contacted { background: #fef3c7; color: #92400e; }
+  .badge-replied   { background: #f3e8ff; color: #7e22ce; }
+  .badge-converted { background: #dcfce7; color: #15803d; }
+  .badge-rejected  { background: #fee2e2; color: #b91c1c; }
+  .badge-skip      { background: #f3f4f6; color: #6b7280; }
+</style>
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-brand">
+    <h5>Shopify CRM</h5>
+    <small>PhotoAgency</small>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Principale</div>
+    <a href="{% url 'stores:dashboard' %}" class="sidebar-link {% block nav_dashboard %}{% endblock %}">
+      <i class="bi bi-grid-1x2"></i> Dashboard
+    </a>
+    <a href="{% url 'stores:store_list' %}" class="sidebar-link {% block nav_stores %}{% endblock %}">
+      <i class="bi bi-shop"></i> Store
+    </a>
+    <div class="nav-section-label" style="margin-top:12px">Strumenti</div>
+    <a href="{% url 'stores:run_selenium' %}" class="sidebar-link {% block nav_selenium %}{% endblock %}">
+      <i class="bi bi-robot"></i> Cerca Store
+    </a>
+    <a href="{% url 'stores:import_stores' %}" class="sidebar-link {% block nav_import %}{% endblock %}">
+      <i class="bi bi-upload"></i> Import Manuale
+    </a>
+    <a href="{% url 'stores:store_list' %}?status=new" class="sidebar-link {% block nav_analyzer %}{% endblock %}">
+      <i class="bi bi-search"></i> Analizza Store
+    </a>
+    <a href="#" class="sidebar-link {% block nav_outreach %}{% endblock %}">
+      <i class="bi bi-envelope"></i> Outreach
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <small style="color:#6b6b80;font-size:11px;">Step 4 — Analisi store</small>
+  </div>
+</div>
+<div class="main-wrap">
+  <div class="topbar">
+    <div class="topbar-title">{% block page_title %}Shopify CRM{% endblock %}</div>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="badge bg-success">Live</span>
+      <small class="text-muted">Django 6</small>
+    </div>
+  </div>
+  <div class="page-content">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
