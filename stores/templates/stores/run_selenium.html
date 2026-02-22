@@ -37,6 +37,12 @@
           </div>
 
           <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.pages.label }}</label>
+            {{ form.pages }}
+            <div class="form-text">Più pagine = più risultati ma più tempo di attesa</div>
+          </div>
+
+          <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.source_label.label }}</label>
             {{ form.source_label }}
             <div class="form-text">{{ form.source_label.help_text }}</div>
@@ -67,7 +73,7 @@
       <div class="card-body" style="font-size:13px">
         <ol class="mb-0 ps-3">
           <li class="mb-1">Django lancia lo script Selenium in background</li>
-          <li class="mb-1">Chrome apre Google e cerca ogni query</li>
+          <li class="mb-1">Chrome apre Google e cerca ogni query su N pagine</li>
           <li class="mb-1">Gli URL trovati vengono salvati in <code>media/selenium_output.txt</code></li>
           <li class="mb-1">Django importa automaticamente i risultati nel DB</li>
           <li>Gli store già presenti vengono saltati (deduplicazione automatica)</li>
@@ -158,7 +164,6 @@
 
 {% block extra_js %}
 <script>
-  // Mostra spinner sul bottone durante l'attesa
   document.querySelector('form').addEventListener('submit', function () {
     const btn = document.getElementById('btn-avvia');
     btn.disabled = true;

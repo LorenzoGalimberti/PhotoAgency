@@ -7,7 +7,6 @@ from .services import run_analysis
 def analyze_store(request, pk):
     """
     Analizza un singolo store (da pagina dettaglio).
-    Funziona sempre — crea un nuovo StoreAnalysis anche se già analizzato.
     """
     store = get_object_or_404(Store, pk=pk)
 
@@ -26,13 +25,12 @@ def analyze_store(request, pk):
 def analyze_all(request):
     """
     Analizza tutti gli store con status=new.
-    Gli store già analizzati (status != new) vengono saltati.
     """
     if request.method != 'POST':
         return redirect('stores:store_list')
 
     stores_to_analyze = Store.objects.filter(status=Store.Status.NEW)
-    total   = stores_to_analyze.count()
+    total = stores_to_analyze.count()
 
     if total == 0:
         messages.info(request,
@@ -54,10 +52,10 @@ def analyze_all(request):
 
     if success_count > 0:
         messages.success(request,
-            f"Analisi massiva completata — "
+            f"Analisi completata — "
             f"{success_count} analizzati, {error_count} errori su {total} totali.")
     if errors:
         messages.warning(request,
-            f"Errori: " + " | ".join(errors[:3]))
+            "Errori: " + " | ".join(errors[:3]))
 
     return redirect('stores:store_list')

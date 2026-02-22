@@ -5,7 +5,6 @@
 
 {% block content %}
 
-<!-- Breadcrumb -->
 <nav class="mb-3">
   <small>
     <a href="{% url 'stores:store_list' %}" class="text-muted text-decoration-none">
@@ -39,9 +38,7 @@
           <i class="bi bi-box-arrow-up-right me-1"></i>Apri store
         </a>
 
-        <!-- Bottoni analisi -->
         {% if store.status == 'new' %}
-        <!-- Store non ancora analizzato: mostra solo Analizza -->
         <form method="post" action="{% url 'analyzer:analyze_store' store.pk %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-success w-100 mb-2"
@@ -50,7 +47,6 @@
           </button>
         </form>
         {% else %}
-        <!-- Store già analizzato: mostra solo Rianalizza -->
         <form method="post" action="{% url 'analyzer:analyze_store' store.pk %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-outline-success w-100 mb-2"
@@ -120,28 +116,79 @@
           <div class="text-muted small mb-1">Social</div>
           <div class="d-flex gap-2 flex-wrap">
             {% if store.instagram %}
-            <a href="{{ store.instagram }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+            <a href="{{ store.instagram }}" target="_blank"
+               class="btn btn-sm btn-outline-secondary py-0 px-2">
               <i class="bi bi-instagram"></i>
             </a>
             {% endif %}
             {% if store.facebook %}
-            <a href="{{ store.facebook }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+            <a href="{{ store.facebook }}" target="_blank"
+               class="btn btn-sm btn-outline-secondary py-0 px-2">
               <i class="bi bi-facebook"></i>
             </a>
             {% endif %}
             {% if store.tiktok %}
-            <a href="{{ store.tiktok }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+            <a href="{{ store.tiktok }}" target="_blank"
+               class="btn btn-sm btn-outline-secondary py-0 px-2">
               <i class="bi bi-tiktok"></i>
             </a>
             {% endif %}
             {% if store.linkedin %}
-            <a href="{{ store.linkedin }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2">
+            <a href="{{ store.linkedin }}" target="_blank"
+               class="btn btn-sm btn-outline-secondary py-0 px-2">
               <i class="bi bi-linkedin"></i>
             </a>
             {% endif %}
           </div>
         </div>
         {% endif %}
+      </div>
+    </div>
+
+    <!-- Messaggio outreach -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-chat-dots me-2"></i>Messaggio outreach</h6>
+      </div>
+      <div class="card-body">
+        <textarea id="msg-outreach" class="form-control font-monospace" rows="10"
+                  style="font-size:12px;resize:none">Ciao {{ store.name|default:"!" }}!
+Ho visto un vostro prodotto sul vostro sito e ho notato una scarsa qualità delle immagini che riducono il tasso di conversione sul prodotto.
+Vi scrivo perché offro un servizio di produzione immagini per e-commerce/ads decisamente più economico di un normale shooting e consegno il lavoro in meno di 36 ore.
+Parto da un semplice scatto per ottenere risultati comparabili a shooting editoriali che aumentano statisticamente il tasso di conversione.
+Ho provato a rifare le immagini di un vostro prodotto.
+Se può interessare le mostro il potenziale e possiamo sentirci per capire se posso fare al caso vostro.</textarea>
+        <button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="copyMsg()">
+          <i class="bi bi-clipboard me-1"></i>Copia messaggio
+        </button>
+        {% if store.whatsapp_url %}
+        <a href="{{ store.whatsapp_url }}" target="_blank"
+           class="btn btn-sm btn-success w-100 mt-2">
+          <i class="bi bi-whatsapp me-1"></i>Apri WhatsApp
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Cambia stato -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-arrow-repeat me-2"></i>Cambia stato</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'stores:change_status' store.pk %}">
+          {% csrf_token %}
+          <select name="status" class="form-select form-select-sm mb-2">
+            {% for val, label in store.Status.choices %}
+            <option value="{{ val }}" {% if store.status == val %}selected{% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm btn-primary w-100">
+            <i class="bi bi-check me-1"></i>Aggiorna stato
+          </button>
+        </form>
       </div>
     </div>
 
@@ -265,7 +312,7 @@
         {% else %}
         <div class="text-center py-4 text-muted">
           <i class="bi bi-envelope fs-2 d-block mb-2 opacity-25"></i>
-          <small>Nessun contatto ancora. Verra aggiunto nel Step 6.</small>
+          <small>Nessun contatto ancora.</small>
         </div>
         {% endif %}
       </div>
@@ -279,9 +326,25 @@
 {% block extra_js %}
 <script>
 function confirmAnalyze(btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi in corso...';
+  setTimeout(() => {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi in corso...';
+  }, 10);
   return true;
+}
+
+function copyMsg() {
+  const txt = document.getElementById('msg-outreach');
+  txt.select();
+  navigator.clipboard.writeText(txt.value).then(() => {
+    const btn = txt.nextElementSibling;
+    btn.innerHTML = '<i class="bi bi-check me-1"></i>Copiato!';
+    btn.classList.replace('btn-outline-primary', 'btn-success');
+    setTimeout(() => {
+      btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copia messaggio';
+      btn.classList.replace('btn-success', 'btn-outline-primary');
+    }, 2000);
+  });
 }
 </script>
 {% endblock %}

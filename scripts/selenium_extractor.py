@@ -1,20 +1,3 @@
-"""
-============================================================================
-SHOPIFY URL EXTRACTOR - SELENIUM AUTOMATICO
-============================================================================
-
-Versione integrata con Django PhotoAgency.
-Salva sempre in: media/selenium_output.txt (path fisso)
-
-Uso da linea di comando:
-    python scripts/selenium_extractor.py
-
-Uso da Django (subprocess):
-    python scripts/selenium_extractor.py --queries "query1|query2" --niche arredamento
-
-============================================================================
-"""
-
 import time
 import re
 import sys
@@ -23,40 +6,28 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-# Fix encoding Windows — deve stare prima di qualsiasi print
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 if sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8')
 
-# ============================================================================
-# CONFIGURAZIONE DEFAULT
-# ============================================================================
-
 DEFAULT_QUERIES = [
     "site:myshopify.com arredamento casa italia",
     "site:myshopify.com home decor italia",
     "site:myshopify.com candele profumate",
-    "site:myshopify.com complementi arredo italiano",
-    "site:myshopify.com mobili design",
 ]
 
 DELAY_BETWEEN_QUERIES = 5
-HEADLESS = False
+DELAY_BETWEEN_PAGES   = 3
+HEADLESS              = False
 
-# Path fisso output
 SCRIPT_DIR  = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 OUTPUT_FILE = PROJECT_DIR / 'media' / 'selenium_output.txt'
 
 
-# ============================================================================
-# SETUP SELENIUM
-# ============================================================================
-
 def setup_driver(headless=False):
     print("[*] Configurazione Selenium...")
-
     try:
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
@@ -81,7 +52,9 @@ def setup_driver(headless=False):
     try:
         service = Service(ChromeDriverManager().install())
         driver  = webdriver.Chrome(service=service, options=options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        driver.execute_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
         print("[OK] Chrome avviato!")
         return driver
     except Exception as e:
@@ -89,56 +62,76 @@ def setup_driver(headless=False):
         return None
 
 
-# ============================================================================
-# RICERCA GOOGLE
-# ============================================================================
-
-def search_google(driver, query):
+def search_google(driver, query, pages=3):
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
 
-    print(f"\n[>] Cerco: {query}")
+    print(f"\n[>] Cerco: {query} ({pages} pagine)")
     urls_found = []
 
-    try:
-        driver.get("https://www.google.com")
-        time.sleep(2)
-
+    for page in range(pages):
         try:
-            btn = driver.find_element(
-                By.XPATH, "//button[contains(., 'Accetta') or contains(., 'Accept')]"
-            )
-            btn.click()
-            time.sleep(1)
-        except:
-            pass
+            if page == 0:
+                # Prima pagina — cerca normalmente
+                driver.get("https://www.google.com")
+                time.sleep(2)
 
-        try:
-            box = driver.find_element(By.NAME, "q")
-        except:
-            box = driver.find_element(By.CSS_SELECTOR, "textarea[name='q']")
+                try:
+                    btn = driver.find_element(
+                        By.XPATH,
+                        "//button[contains(., 'Accetta') or contains(., 'Accept')]"
+                    )
+                    btn.click()
+                    time.sleep(1)
+                except:
+                    pass
 
-        box.clear()
-        box.send_keys(query)
-        box.send_keys(Keys.RETURN)
-        time.sleep(3)
+                try:
+                    box = driver.find_element(By.NAME, "q")
+                except:
+                    box = driver.find_element(By.CSS_SELECTOR, "textarea[name='q']")
 
-        for link in driver.find_elements(By.TAG_NAME, "a"):
-            try:
-                url = link.get_attribute("href")
-                if url and 'myshopify.com' in url:
-                    clean = extract_clean_url(url)
-                    if clean and clean not in urls_found:
-                        urls_found.append(clean)
-                        print(f"   [+] {clean}")
-            except:
-                continue
+                box.clear()
+                box.send_keys(query)
+                box.send_keys(Keys.RETURN)
+                time.sleep(3)
 
-        print(f"   [=] {len(urls_found)} store da questa query")
+            else:
+                # Pagine successive — clicca "Avanti"
+                try:
+                    next_btn = driver.find_element(
+                        By.XPATH,
+                        "//a[@id='pnnext'] | //a[contains(@aria-label,'Next')] | //a[contains(@aria-label,'Avanti')]"
+                    )
+                    next_btn.click()
+                    time.sleep(DELAY_BETWEEN_PAGES)
+                except Exception as e:
+                    print(f"   [!] Nessuna pagina successiva — stop ({e})")
+                    break
 
-    except Exception as e:
-        print(f"   [!] Errore: {e}")
+            print(f"   [pagina {page+1}/{pages}]")
 
+            # Raccoglie URL dalla pagina corrente
+            new_found = 0
+            for link in driver.find_elements(By.TAG_NAME, "a"):
+                try:
+                    url = link.get_attribute("href")
+                    if url and 'myshopify.com' in url:
+                        clean = extract_clean_url(url)
+                        if clean and clean not in urls_found:
+                            urls_found.append(clean)
+                            new_found += 1
+                            print(f"   [+] {clean}")
+                except:
+                    continue
+
+            print(f"   [=] {new_found} nuovi da pagina {page+1}")
+
+        except Exception as e:
+            print(f"   [!] Errore pagina {page+1}: {e}")
+            break
+
+    print(f"   [=] Totale da questa query: {len(urls_found)}")
     return urls_found
 
 
@@ -150,10 +143,6 @@ def extract_clean_url(url):
             return f"https://{name}.myshopify.com"
     return None
 
-
-# ============================================================================
-# SALVATAGGIO
-# ============================================================================
 
 def save_results(urls, output_file=OUTPUT_FILE):
     if not urls:
@@ -173,16 +162,13 @@ def save_results(urls, output_file=OUTPUT_FILE):
     return str(output_file)
 
 
-# ============================================================================
-# MAIN
-# ============================================================================
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--queries', type=str, default=None,
-                        help='Query separate da | es: "query1|query2"')
+    parser.add_argument('--queries',  type=str, default=None)
     parser.add_argument('--headless', action='store_true')
-    parser.add_argument('--output', type=str, default=str(OUTPUT_FILE))
+    parser.add_argument('--output',   type=str, default=str(OUTPUT_FILE))
+    parser.add_argument('--pages',    type=int, default=3,
+                        help='Numero pagine Google per query')
     args = parser.parse_args()
 
     if args.queries:
@@ -194,6 +180,7 @@ def main():
     print("SHOPIFY URL EXTRACTOR")
     print("=" * 60)
     print(f"Query:    {len(queries)}")
+    print(f"Pagine:   {args.pages} per query")
     print(f"Modalita: {'Headless' if args.headless else 'Visibile'}")
     print(f"Output:   {args.output}")
     print()
@@ -207,7 +194,7 @@ def main():
     try:
         for i, query in enumerate(queries, 1):
             print(f"\n-- QUERY {i}/{len(queries)} --")
-            urls = search_google(driver, query)
+            urls = search_google(driver, query, pages=args.pages)
             all_urls.update(urls)
             print(f"[=] Totale progressivo: {len(all_urls)} store unici")
 
@@ -235,3 +222,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

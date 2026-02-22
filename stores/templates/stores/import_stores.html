@@ -21,6 +21,11 @@
             {{ form.file }}
             <div class="form-text">{{ form.file.help_text }}</div>
           </div>
+          <div class="mb-3">
+    <label class="form-label fw-semibold">{{ form.urls_text.label }}</label>
+    {{ form.urls_text }}
+    <div class="form-text">{{ form.urls_text.help_text }}</div>
+</div>
 
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.niche.label }}</label>

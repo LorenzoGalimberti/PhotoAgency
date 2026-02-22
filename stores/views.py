@@ -33,19 +33,29 @@ def import_stores(request):
     if request.method == 'POST':
         form = ImportStoresForm(request.POST, request.FILES)
         if form.is_valid():
-            uploaded_file = request.FILES['file']
-            niche         = form.cleaned_data['niche']
-            source_label  = form.cleaned_data.get('source_label', '')
+            niche        = form.cleaned_data['niche']
+            source_label = form.cleaned_data.get('source_label', '')
+            content      = ''
 
-            try:
-                content = uploaded_file.read().decode('utf-8')
-            except UnicodeDecodeError:
-                content = uploaded_file.read().decode('latin-1')
+            if request.FILES.get('file'):
+                uploaded_file = request.FILES['file']
+                try:
+                    content = uploaded_file.read().decode('utf-8')
+                except UnicodeDecodeError:
+                    content = uploaded_file.read().decode('latin-1')
+
+            if form.cleaned_data.get('urls_text'):
+                content += '\n' + form.cleaned_data['urls_text']
+
+            if not content.strip():
+                messages.error(request,
+                    "Inserisci un file oppure incolla almeno un URL.")
+                return redirect('stores:import_stores')
 
             result = import_stores_from_content(
                 content=content,
                 niche=niche,
-                source_label=source_label or uploaded_file.name,
+                source_label=source_label or 'Import Manuale',
             )
 
             n_imported = len(result['imported'])
@@ -87,6 +97,7 @@ def run_selenium(request):
             niche        = form.cleaned_data['niche']
             headless     = form.cleaned_data['headless']
             source_label = form.cleaned_data.get('source_label', '')
+            pages        = int(form.cleaned_data.get('pages', 3))
 
             query_list  = [q.strip() for q in queries.splitlines() if q.strip()]
             queries_arg = '|'.join(query_list)
@@ -99,7 +110,9 @@ def run_selenium(request):
                 return redirect('stores:run_selenium')
 
             cmd = [sys.executable, str(script_path),
-                   '--queries', queries_arg, '--output', str(output_file)]
+                   '--queries', queries_arg,
+                   '--output',  str(output_file),
+                   '--pages',   str(pages)]
             if headless:
                 cmd.append('--headless')
 
@@ -215,3 +228,15 @@ def store_detail(request, pk):
         'contacts': contacts,
         'latest':   analyses.first(),
     })
+
+
+def change_status(request, pk):
+    store = get_object_or_404(Store, pk=pk)
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        if new_status in dict(Store.Status.choices):
+            store.status = new_status
+            store.save(update_fields=['status'])
+            messages.success(request,
+                f"Stato aggiornato: {store.get_status_display()}")
+    return redirect('stores:store_detail', pk=pk)
