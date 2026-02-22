@@ -145,31 +145,6 @@
       </div>
     </div>
 
-    <!-- Messaggio outreach -->
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white border-bottom">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-chat-dots me-2"></i>Messaggio outreach</h6>
-      </div>
-      <div class="card-body">
-        <textarea id="msg-outreach" class="form-control font-monospace" rows="10"
-                  style="font-size:12px;resize:none">Ciao {{ store.name|default:"!" }}!
-Ho visto un vostro prodotto sul vostro sito e ho notato una scarsa qualità delle immagini che riducono il tasso di conversione sul prodotto.
-Vi scrivo perché offro un servizio di produzione immagini per e-commerce/ads decisamente più economico di un normale shooting e consegno il lavoro in meno di 36 ore.
-Parto da un semplice scatto per ottenere risultati comparabili a shooting editoriali che aumentano statisticamente il tasso di conversione.
-Ho provato a rifare le immagini di un vostro prodotto.
-Se può interessare le mostro il potenziale e possiamo sentirci per capire se posso fare al caso vostro.</textarea>
-        <button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="copyMsg()">
-          <i class="bi bi-clipboard me-1"></i>Copia messaggio
-        </button>
-        {% if store.whatsapp_url %}
-        <a href="{{ store.whatsapp_url }}" target="_blank"
-           class="btn btn-sm btn-success w-100 mt-2">
-          <i class="bi bi-whatsapp me-1"></i>Apri WhatsApp
-        </a>
-        {% endif %}
-      </div>
-    </div>
-
     <!-- Cambia stato -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white border-bottom">
@@ -244,14 +219,10 @@ Se può interessare le mostro il potenziale e possiamo sentirci per capire se po
                 </small>
               </td>
               <td>
-                {% if a.report_file %}
-                <a href="/media/reports/{{ a.report_file }}" target="_blank"
+                <a href="{% url 'analyzer:analysis_report' a.pk %}"
                    class="btn btn-sm btn-outline-primary py-0 px-2">
-                  <i class="bi bi-file-earmark-text"></i>
+                  <i class="bi bi-bar-chart-line"></i>
                 </a>
-                {% else %}
-                <small class="text-muted">—</small>
-                {% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -270,6 +241,40 @@ Se può interessare le mostro il potenziale e possiamo sentirci per capire se po
           </form>
         </div>
         {% endif %}
+      </div>
+    </div>
+
+    <!-- Messaggio outreach -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-chat-dots me-2"></i>Messaggio outreach</h6>
+        <div class="d-flex gap-2 align-items-center">
+          {% if store.whatsapp_url %}
+          <a href="{{ store.whatsapp_url }}" target="_blank"
+             class="btn btn-sm btn-outline-success py-0 px-2">
+            <i class="bi bi-whatsapp me-1"></i>WhatsApp
+          </a>
+          {% endif %}
+          <button id="btn-copy" onclick="copyMsg()"
+                  style="background:none;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;transition:all .15s;"
+                  onmouseenter="this.style.background='#f3f4f6'"
+                  onmouseleave="this.style.background='none'">
+            <i id="copy-icon" class="bi bi-clipboard" style="font-size:13px"></i>
+            <span id="copy-label">Copia</span>
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <textarea id="msg-outreach" class="form-control font-monospace border-0 rounded-0"
+                  rows="8" style="font-size:13px;resize:none;background:#f9fafb;padding:16px 20px;outline:none;box-shadow:none;">Ciao {{ store.name|default:"!" }},
+
+ho visto il vostro store e ho notato che le immagini dei prodotti potrebbero lavorare di più per voi.
+
+Trasformo foto di prodotti esistenti in immagini da catalogo professionale — senza shooting, consegna in 36 ore.
+
+Ho rifatto come esempio una delle vostre immagini per mostrarvi la differenza concreta.
+
+Posso mandarvela?</textarea>
       </div>
     </div>
 
@@ -335,14 +340,19 @@ function confirmAnalyze(btn) {
 
 function copyMsg() {
   const txt = document.getElementById('msg-outreach');
-  txt.select();
   navigator.clipboard.writeText(txt.value).then(() => {
-    const btn = txt.nextElementSibling;
-    btn.innerHTML = '<i class="bi bi-check me-1"></i>Copiato!';
-    btn.classList.replace('btn-outline-primary', 'btn-success');
+    const icon  = document.getElementById('copy-icon');
+    const label = document.getElementById('copy-label');
+    const btn   = document.getElementById('btn-copy');
+    icon.className  = 'bi bi-check';
+    label.textContent = 'Copiato';
+    btn.style.borderColor = '#22c55e';
+    btn.style.color = '#16a34a';
     setTimeout(() => {
-      btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copia messaggio';
-      btn.classList.replace('btn-success', 'btn-outline-primary');
+      icon.className  = 'bi bi-clipboard';
+      label.textContent = 'Copia';
+      btn.style.borderColor = '#d1d5db';
+      btn.style.color = '#374151';
     }, 2000);
   });
 }

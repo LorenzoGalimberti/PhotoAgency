@@ -1035,33 +1035,24 @@ def main():
     extra_imgs = [r for r in analyzed if r.get('is_extra')]
     avg_img    = round(sum(r['overall_score'] for r in analyzed) / len(analyzed)) if analyzed else 0
 
-    log("Generazione report...")
-    html = generate_html_report(
-        store_url, store_name, basic_info, contacts,
-        contact_page, products_info, img_quality_fast,
-        lead_score, img_results
-    )
-
-    ts          = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_name   = re.sub(r'[^\w]', '_', store_name)
-    report_name = f"report_{safe_name}_{ts}.html"
-    report_path = output_dir / report_name
-
-    with open(report_path, 'w', encoding='utf-8') as f:
-        f.write(html)
-
     duration = (datetime.now() - t0).seconds
     log(f"Completato in {duration}s — {len(prod_imgs)} img prodotto + {len(extra_imgs)} img extra")
+
+    def safe_img(r):
+        if r is None:
+            return None
+        return {k: v for k, v in r.items() if k != 'pil_img'}
 
     result = {
         'success':    True,
         'store_url':  store_url,
         'store_name': store_name,
-        'report_file': report_name,
+        'report_file': '',
         'duration_s': duration,
         'lead_score':     lead_score['total_score'],
         'lead_priority':  lead_score['priority'],
         'lead_potential': lead_score['potential'],
+        'lead_breakdown': lead_score['breakdown'],
         'product_count': products_info['total_count'],
         'price_avg':     products_info['price_avg'],
         'price_min':     products_info['price_min'],
@@ -1077,6 +1068,7 @@ def main():
         'img_issues':          json.dumps(img_quality_fast['issues']),
         'img_analyzed_count':  len(analyzed),
         'img_avg_score':       avg_img,
+        'img_results':         [safe_img(r) for r in img_results],
         'store_title':       basic_info.get('title', '') or '',
         'store_description': basic_info.get('description', '') or '',
         'store_language':    basic_info.get('language', '') or '',
@@ -1099,4 +1091,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

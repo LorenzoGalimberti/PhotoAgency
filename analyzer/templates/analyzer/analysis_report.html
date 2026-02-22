@@ -1,0 +1,624 @@
+{% extends 'base.html' %}
+{% block title %}Report {{ store.name|default:store.domain }} — Shopify CRM{% endblock %}
+{% block nav_stores %}active{% endblock %}
+{% block page_title %}Report analisi{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tab-nav { display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px; }
+  .tab-btn {
+    padding: 10px 18px; font-size: 13px; font-weight: 500;
+    border: none; background: none; cursor: pointer; color: #6b7280;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: all .15s;
+  }
+  .tab-btn:hover { color: #111; }
+  .tab-btn.active { color: #7c3aed; border-bottom-color: #7c3aed; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .score-ring {
+    width: 80px; height: 80px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 3px solid; flex-shrink: 0;
+  }
+  .score-ring .num { font-size: 22px; font-weight: 800; line-height: 1; }
+  .score-ring .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
+
+  .breakdown-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
+  .breakdown-row:last-child { border: none; }
+  .bd-label { font-size: 13px; font-weight: 600; min-width: 150px; }
+  .bd-bar-wrap { flex: 1; height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
+  .bd-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #7c3aed, #06b6d4); }
+  .bd-pts { font-size: 12px; font-weight: 700; min-width: 40px; text-align: right; }
+  .bd-reason { font-size: 11px; color: #9ca3af; min-width: 180px; text-align: right; }
+
+  .stat-box { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 10px; padding: 16px 20px; }
+  .stat-box .n { font-size: 26px; font-weight: 800; line-height: 1; }
+  .stat-box .l { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-top: 4px; }
+
+  .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .img-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; transition: transform .2s, border-color .2s; background: #fff; }
+  .img-card:hover { transform: translateY(-2px); border-color: #7c3aed; }
+  .img-wrap { position: relative; aspect-ratio: 1; overflow: hidden; background: #f9fafb; }
+  .img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .no-img { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #d1d5db; }
+  .grade-dot {
+    position: absolute; top: 8px; left: 8px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  }
+  .score-chip { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 10px; padding: 2px 8px; border-top-left-radius: 7px; }
+  .img-card-body { padding: 10px 12px; }
+  .img-source { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #7c3aed; margin-bottom: 2px; }
+  .img-ctx { font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
+  .img-badges { display: flex; gap: 3px; flex-wrap: wrap; min-height: 18px; margin-bottom: 6px; }
+  .ibadge { padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+  .ibadge-red    { background: #fee2e2; color: #dc2626; }
+  .ibadge-orange { background: #ffedd5; color: #ea580c; }
+  .ibadge-yellow { background: #fef9c3; color: #ca8a04; }
+  .img-metrics { font-size: 10px; display: flex; flex-direction: column; gap: 3px; }
+  .img-metric { display: flex; justify-content: space-between; }
+  .img-metric .ml { color: #9ca3af; }
+
+  .grade-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: #f9fafb; border: 1px solid #e5e7eb; }
+  .grade-letter { font-size: 16px; font-weight: 800; }
+  .grade-cnt { font-size: 12px; color: #6b7280; }
+
+  .issue-item { padding: 8px 14px; background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 13px; margin-bottom: 6px; }
+
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .contact-item { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 8px; padding: 14px 16px; }
+  .contact-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #7c3aed; margin-bottom: 4px; }
+  .contact-val { font-size: 13px; word-break: break-all; }
+
+  .section-divider { border: none; border-top: 1px solid #f3f4f6; margin: 24px 0; }
+  .source-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #f3f4f6; }
+  .source-title { font-size: 14px; font-weight: 700; }
+  .source-avg { font-size: 12px; color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav class="mb-3">
+  <small>
+    <a href="{% url 'stores:store_list' %}" class="text-muted text-decoration-none">
+      <i class="bi bi-shop me-1"></i>Store
+    </a>
+    <span class="text-muted mx-1">/</span>
+    <a href="{% url 'stores:store_detail' store.pk %}" class="text-muted text-decoration-none">
+      {{ store.name|default:store.domain }}
+    </a>
+    <span class="text-muted mx-1">/</span>
+    <span>Report {{ analysis.created_at|date:"d/m/Y H:i" }}</span>
+  </small>
+</nav>
+
+<!-- Header -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <div class="d-flex align-items-center gap-4 flex-wrap">
+
+      <!-- Score ring -->
+      {% with s=analysis.lead_score %}
+      <div class="score-ring {% if s >= 70 %}border-danger text-danger{% elif s >= 50 %}border-warning text-warning{% else %}border-secondary text-secondary{% endif %}">
+        <div class="num">{{ s }}</div>
+        <div class="lbl">Score</div>
+      </div>
+      {% endwith %}
+
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <h5 class="fw-bold mb-0">{{ store.name|default:store.domain }}</h5>
+          <span class="badge badge-{{ store.status }} rounded-pill px-2">{{ store.get_status_display }}</span>
+        </div>
+        <div class="text-muted small mb-2">{{ store.url }} · Analisi del {{ analysis.created_at|date:"d/m/Y alle H:i" }} · {{ analysis.duration_s }}s</div>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge rounded-pill px-3 py-1
+            {% if analysis.lead_priority == 'HOT' %}bg-danger
+            {% elif analysis.lead_priority == 'WARM' %}bg-warning text-dark
+            {% else %}bg-secondary{% endif %}">
+            {% if analysis.lead_priority == 'HOT' %}🔥{% elif analysis.lead_priority == 'WARM' %}🌟{% else %}❄️{% endif %}
+            {{ analysis.lead_priority }}
+          </span>
+          <span class="badge bg-light text-dark rounded-pill px-3 py-1">Potenziale {{ analysis.lead_potential }}</span>
+          <span class="badge bg-light text-dark rounded-pill px-3 py-1">{{ analysis.product_count }} prodotti</span>
+          <span class="badge bg-light text-dark rounded-pill px-3 py-1">€{{ analysis.price_avg }} medio</span>
+        </div>
+      </div>
+
+      <a href="{% url 'stores:store_detail' store.pk %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Torna allo store
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Tab nav -->
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="showTab('lead', this)">🎯 Lead Score</button>
+  <button class="tab-btn" onclick="showTab('store', this)">🏪 Store</button>
+  <button class="tab-btn" onclick="showTab('contacts', this)">📞 Contatti</button>
+  <button class="tab-btn" onclick="showTab('products', this)">🏷️ Prodotti</button>
+  <button class="tab-btn" onclick="showTab('images', this)">📸 Immagini prodotto
+    {% if prod_imgs %}<span class="badge bg-secondary ms-1">{{ prod_imgs|length }}</span>{% endif %}
+  </button>
+  <button class="tab-btn" onclick="showTab('extra', this)">🖼️ Immagini extra
+    {% if extra_imgs %}<span class="badge bg-secondary ms-1">{{ extra_imgs|length }}</span>{% endif %}
+  </button>
+</div>
+
+<!-- TAB: LEAD SCORE -->
+<div id="tab-lead" class="tab-panel active">
+  <div class="row g-3 mb-4">
+    <div class="col-sm-4">
+      <div class="stat-box">
+        <div class="n {% if analysis.lead_score >= 70 %}text-danger{% elif analysis.lead_score >= 50 %}text-warning{% else %}text-secondary{% endif %}">
+          {{ analysis.lead_score }}/100
+        </div>
+        <div class="l">Score totale</div>
+      </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="stat-box">
+        <div class="n">{{ analysis.lead_priority }}</div>
+        <div class="l">Priorità</div>
+      </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="stat-box">
+        <div class="n">{{ analysis.lead_potential }}</div>
+        <div class="l">Potenziale</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+      <h6 class="mb-0 fw-semibold">Breakdown punteggio</h6>
+    </div>
+    <div class="card-body">
+      {% if lead_breakdown %}
+        {% for crit, data in lead_breakdown.items %}
+        <div class="breakdown-row">
+          <div class="bd-label">{{ crit }}</div>
+          <div class="bd-bar-wrap">
+            {% if data.max %}
+            <div class="bd-bar-fill" style="width:{% widthratio data.score data.max 100 %}%"></div>
+            {% endif %}
+          </div>
+          <div class="bd-pts">{{ data.score }}/{{ data.max }}</div>
+          <div class="bd-reason">{{ data.reason }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted small mb-0">Breakdown non disponibile — rianalizza lo store per avere i dati dettagliati.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- TAB: STORE -->
+<div id="tab-store" class="tab-panel">
+  <div class="row g-3">
+    {% with t=analysis.store_title d=analysis.store_description l=analysis.store_language th=analysis.store_theme %}
+    <div class="col-sm-6 col-lg-4">
+      <div class="contact-item">
+        <div class="contact-label">Titolo</div>
+        <div class="contact-val">{{ t|default:"—" }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="contact-item">
+        <div class="contact-label">Lingua</div>
+        <div class="contact-val">{{ l|default:"—" }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="contact-item">
+        <div class="contact-label">Tema</div>
+        <div class="contact-val">{{ th|default:"—" }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="contact-item">
+        <div class="contact-label">Google Analytics</div>
+        <div class="contact-val">
+          {% if analysis.has_analytics %}
+            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Presente</span>
+          {% else %}
+            <span class="text-muted"><i class="bi bi-x-circle me-1"></i>Assente</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="contact-item">
+        <div class="contact-label">Facebook Pixel</div>
+        <div class="contact-val">
+          {% if analysis.has_fb_pixel %}
+            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Presente</span>
+          {% else %}
+            <span class="text-muted"><i class="bi bi-x-circle me-1"></i>Assente</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% if d %}
+    <div class="col-12">
+      <div class="contact-item">
+        <div class="contact-label">Descrizione</div>
+        <div class="contact-val" style="font-size:13px">{{ d }}</div>
+      </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+  </div>
+</div>
+
+<!-- TAB: CONTATTI -->
+<div id="tab-contacts" class="tab-panel">
+  <div class="contact-grid mb-4">
+    <div class="contact-item">
+      <div class="contact-label">Email</div>
+      <div class="contact-val">
+        {% if store.email %}
+          <a href="mailto:{{ store.email }}" class="text-decoration-none text-primary">{{ store.email }}</a>
+        {% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-label">Telefono</div>
+      <div class="contact-val">{{ store.phone|default:"—" }}</div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-label">WhatsApp</div>
+      <div class="contact-val">
+        {% if store.whatsapp_url %}
+          <a href="{{ store.whatsapp_url }}" target="_blank" class="text-decoration-none text-success">
+            <i class="bi bi-whatsapp me-1"></i>Apri chat
+          </a>
+        {% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-label">P.IVA</div>
+      <div class="contact-val">{{ store.piva|default:"—" }}</div>
+    </div>
+    <div class="contact-item">
+      <div class="contact-label">Indirizzo</div>
+      <div class="contact-val">{{ store.address|default:"—" }}</div>
+    </div>
+  </div>
+
+  {% if store.instagram or store.facebook or store.tiktok or store.linkedin %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+      <h6 class="mb-0 fw-semibold">Social</h6>
+    </div>
+    <div class="card-body d-flex gap-2 flex-wrap">
+      {% if store.instagram %}
+        <a href="{{ store.instagram }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-instagram me-1"></i>Instagram
+        </a>
+      {% endif %}
+      {% if store.facebook %}
+        <a href="{{ store.facebook }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-facebook me-1"></i>Facebook
+        </a>
+      {% endif %}
+      {% if store.tiktok %}
+        <a href="{{ store.tiktok }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-tiktok me-1"></i>TikTok
+        </a>
+      {% endif %}
+      {% if store.linkedin %}
+        <a href="{{ store.linkedin }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-linkedin me-1"></i>LinkedIn
+        </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- TAB: PRODOTTI -->
+<div id="tab-products" class="tab-panel">
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-sm-3">
+      <div class="stat-box">
+        <div class="n">{{ analysis.product_count }}</div>
+        <div class="l">Prodotti</div>
+      </div>
+    </div>
+    <div class="col-6 col-sm-3">
+      <div class="stat-box">
+        <div class="n text-info">€{{ analysis.price_avg }}</div>
+        <div class="l">Prezzo medio</div>
+      </div>
+    </div>
+    <div class="col-6 col-sm-3">
+      <div class="stat-box">
+        <div class="n text-muted">€{{ analysis.price_min }}</div>
+        <div class="l">Prezzo min</div>
+      </div>
+    </div>
+    <div class="col-6 col-sm-3">
+      <div class="stat-box">
+        <div class="n text-muted">€{{ analysis.price_max }}</div>
+        <div class="l">Prezzo max</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h6 class="mb-0 fw-semibold">Categorie</h6>
+        </div>
+        <div class="card-body">
+          {% if analysis.categories %}
+            {% for cat in analysis.categories.split|slice:":6" %}
+              <span class="badge bg-light text-dark border me-1 mb-1 px-2 py-1">{{ cat }}</span>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted small">—</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h6 class="mb-0 fw-semibold">Vendor</h6>
+        </div>
+        <div class="card-body">
+          {% if analysis.vendors %}
+            {% for v in analysis.vendors.split|slice:":6" %}
+              <span class="badge bg-light text-dark border me-1 mb-1 px-2 py-1">{{ v }}</span>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted small">—</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Riepilogo immagini prodotto -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+      <h6 class="mb-0 fw-semibold">Qualità immagini prodotto</h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-sm-3">
+          <div class="stat-box">
+            <div class="n {% if analysis.img_quality_score < 50 %}text-danger{% elif analysis.img_quality_score < 70 %}text-warning{% else %}text-success{% endif %}">
+              {{ analysis.img_quality_score }}/100
+            </div>
+            <div class="l">Score</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-3">
+          <div class="stat-box">
+            <div class="n">{{ analysis.img_total }}</div>
+            <div class="l">Totale img</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-3">
+          <div class="stat-box">
+            <div class="n text-warning">{{ analysis.img_single_count }}</div>
+            <div class="l">Solo 1 foto</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-3">
+          <div class="stat-box">
+            <div class="n text-danger">{{ analysis.img_low_res_count }}</div>
+            <div class="l">Low-res</div>
+          </div>
+        </div>
+      </div>
+      {% if img_issues %}
+        {% for issue in img_issues %}
+          <div class="issue-item">{{ issue }}</div>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- TAB: IMMAGINI PRODOTTO -->
+<div id="tab-images" class="tab-panel">
+  {% if prod_imgs %}
+    <div class="d-flex gap-3 flex-wrap align-items-center mb-4">
+      <div class="stat-box" style="min-width:100px">
+        <div class="n {% if avg_prod >= 70 %}text-success{% elif avg_prod >= 40 %}text-warning{% else %}text-danger{% endif %}">
+          {{ avg_prod }}/100
+        </div>
+        <div class="l">Score medio</div>
+      </div>
+      <div class="stat-box" style="min-width:100px">
+        <div class="n">{{ prod_imgs|length }}</div>
+        <div class="l">Analizzate</div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        {% for grade, cnt in grade_counts.items %}
+        <div class="grade-pill">
+          <span class="grade-letter {% if grade == 'A' %}text-success{% elif grade == 'B' %}text-success{% elif grade == 'C' %}text-warning{% else %}text-danger{% endif %}">
+            {{ grade }}
+          </span>
+          <span class="grade-cnt">{{ cnt }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% for source, imgs in by_source_prod.items %}
+    <div class="mb-5">
+      <div class="source-header">
+        <div class="source-title">{{ source }} <span class="badge bg-secondary ms-2">{{ imgs|length }}</span></div>
+        {% with avg=0 %}
+        <div class="source-avg text-muted small">{{ imgs|length }} immagini</div>
+        {% endwith %}
+      </div>
+      <div class="img-grid">
+        {% for r in imgs %}
+        <div class="img-card">
+          <div class="img-wrap">
+            {% if r.thumbnail_b64 %}
+              <img src="data:image/jpeg;base64,{{ r.thumbnail_b64 }}" alt="{{ r.alt }}">
+            {% else %}
+              <div class="no-img"><i class="bi bi-image"></i></div>
+            {% endif %}
+            <div class="grade-dot
+              {% if r.grade == 'A' %}bg-success
+              {% elif r.grade == 'B' %}bg-success
+              {% elif r.grade == 'C' %}bg-warning
+              {% else %}bg-danger{% endif %}">
+              {{ r.grade }}
+            </div>
+            <div class="score-chip">{{ r.overall_score }}/100</div>
+          </div>
+          <div class="img-card-body">
+            <div class="img-source">{{ r.source }}</div>
+            <div class="img-ctx">{{ r.context|truncatechars:40 }}</div>
+            <div class="img-badges">
+              {% if r.blur and r.blur.score < 45 %}<span class="ibadge ibadge-red">SFOCATA</span>{% endif %}
+              {% if r.resolution and r.resolution.score < 40 %}<span class="ibadge ibadge-orange">LOW RES</span>{% endif %}
+              {% if r.alt_analysis and r.alt_analysis.score == 0 %}<span class="ibadge ibadge-yellow">NO ALT</span>{% endif %}
+            </div>
+            <div class="img-metrics">
+              {% if r.resolution %}
+              <div class="img-metric">
+                <span class="ml">Risoluzione</span>
+                <span>{{ r.resolution.width }}×{{ r.resolution.height }}</span>
+              </div>
+              {% endif %}
+              {% if r.blur %}
+              <div class="img-metric">
+                <span class="ml">Nitidezza</span>
+                <span>{{ r.blur.label }}</span>
+              </div>
+              {% endif %}
+              {% if r.background %}
+              <div class="img-metric">
+                <span class="ml">Sfondo</span>
+                <span>{{ r.background.label }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-images fs-1 d-block mb-3 opacity-25"></i>
+      <p class="mb-0">Nessuna immagine prodotto analizzata.<br>
+      <small>Rianalizza lo store per ottenere i dati visivi.</small></p>
+    </div>
+  {% endif %}
+</div>
+
+<!-- TAB: IMMAGINI EXTRA -->
+<div id="tab-extra" class="tab-panel">
+  {% if extra_imgs %}
+    <div class="alert alert-light border mb-4" style="font-size:13px">
+      Immagini raccolte da Homepage, Collections, About e altre pagine del sito.
+      Conteggio separato dalle immagini prodotto.
+    </div>
+    <div class="d-flex gap-3 flex-wrap align-items-center mb-4">
+      <div class="stat-box" style="min-width:100px">
+        <div class="n {% if avg_extra >= 70 %}text-success{% elif avg_extra >= 40 %}text-warning{% else %}text-danger{% endif %}">
+          {{ avg_extra }}/100
+        </div>
+        <div class="l">Score medio</div>
+      </div>
+      <div class="stat-box" style="min-width:100px">
+        <div class="n">{{ extra_imgs|length }}</div>
+        <div class="l">Analizzate</div>
+      </div>
+    </div>
+
+    {% for source, imgs in by_source_extra.items %}
+    <div class="mb-5">
+      <div class="source-header">
+        <div class="source-title">{{ source }} <span class="badge bg-secondary ms-2">{{ imgs|length }}</span></div>
+        <div class="source-avg text-muted small">{{ imgs|length }} immagini</div>
+      </div>
+      <div class="img-grid">
+        {% for r in imgs %}
+        <div class="img-card">
+          <div class="img-wrap">
+            {% if r.thumbnail_b64 %}
+              <img src="data:image/jpeg;base64,{{ r.thumbnail_b64 }}" alt="{{ r.alt }}">
+            {% else %}
+              <div class="no-img"><i class="bi bi-image"></i></div>
+            {% endif %}
+            <div class="grade-dot
+              {% if r.grade == 'A' %}bg-success
+              {% elif r.grade == 'B' %}bg-success
+              {% elif r.grade == 'C' %}bg-warning
+              {% else %}bg-danger{% endif %}">
+              {{ r.grade }}
+            </div>
+            <div class="score-chip">{{ r.overall_score }}/100</div>
+          </div>
+          <div class="img-card-body">
+            <div class="img-source">{{ r.source }}</div>
+            <div class="img-ctx">{{ r.context|truncatechars:40 }}</div>
+            <div class="img-badges">
+              {% if r.blur and r.blur.score < 45 %}<span class="ibadge ibadge-red">SFOCATA</span>{% endif %}
+              {% if r.resolution and r.resolution.score < 40 %}<span class="ibadge ibadge-orange">LOW RES</span>{% endif %}
+              {% if r.alt_analysis and r.alt_analysis.score == 0 %}<span class="ibadge ibadge-yellow">NO ALT</span>{% endif %}
+            </div>
+            <div class="img-metrics">
+              {% if r.resolution %}
+              <div class="img-metric">
+                <span class="ml">Risoluzione</span>
+                <span>{{ r.resolution.width }}×{{ r.resolution.height }}</span>
+              </div>
+              {% endif %}
+              {% if r.blur %}
+              <div class="img-metric">
+                <span class="ml">Nitidezza</span>
+                <span>{{ r.blur.label }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-images fs-1 d-block mb-3 opacity-25"></i>
+      <p class="mb-0">Nessuna immagine extra analizzata.</p>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+{% endblock %}
