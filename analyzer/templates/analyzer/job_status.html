@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+{% block title %}Analisi in corso — Shopify CRM{% endblock %}
+{% block nav_analyzer %}active{% endblock %}
+{% block page_title %}
+  {% if job %}
+    {% if job.type == 'bulk' %}Analisi bulk{% else %}Analisi store{% endif %}
+  {% else %}
+    Job non trovato
+  {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Layout ── */
+  .job-wrap { max-width: 860px; margin: 0 auto; }
+
+  /* ── Status hero ── */
+  .status-hero {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  }
+  .status-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; flex-shrink: 0;
+  }
+  .status-icon.running  { background: #ede9fe; }
+  .status-icon.completed { background: #dcfce7; }
+  .status-icon.error    { background: #fee2e2; }
+  .status-label { font-size: 13px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .status-title { font-size: 20px; font-weight: 700; color: #111; }
+  .status-sub   { font-size: 13px; color: #6b7280; margin-top: 4px; }
+
+  /* ── Progress bar ── */
+  .progress-wrap { background: #f3f4f6; border-radius: 99px; height: 10px; overflow: hidden; margin: 6px 0; }
+  .progress-fill {
+    height: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, #7c3aed, #06b6d4);
+    transition: width .4s ease;
+  }
+  .progress-label { font-size: 12px; color: #6b7280; display: flex; justify-content: space-between; }
+
+  /* ── Current store ── */
+  .current-store {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px;
+  }
+  .current-store .spinner-border { width: 16px; height: 16px; border-width: 2px; color: #7c3aed; }
+  .current-store .url { color: #6b7280; font-size: 12px; margin-top: 2px; }
+
+  /* ── Log console ── */
+  .log-console {
+    background: #1e1b2e; border-radius: 12px;
+    padding: 0; overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  }
+  .log-header {
+    background: #2d2840; padding: 10px 18px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .log-header span { color: #a78bfa; font-size: 12px; font-weight: 600; }
+  .log-body {
+    padding: 14px 18px;
+    height: 260px; overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    scroll-behavior: smooth;
+  }
+  .log-body::-webkit-scrollbar { width: 6px; }
+  .log-body::-webkit-scrollbar-track { background: #1e1b2e; }
+  .log-body::-webkit-scrollbar-thumb { background: #4c4870; border-radius: 3px; }
+
+  .log-line { display: flex; gap: 10px; }
+  .log-time  { color: #6b6b80; flex-shrink: 0; }
+  .log-msg.info    { color: #c4b5fd; }
+  .log-msg.success { color: #86efac; }
+  .log-msg.error   { color: #fca5a5; }
+  .log-msg.warn    { color: #fcd34d; }
+
+  /* ── Results table ── */
+  .results-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+    overflow: hidden; margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  }
+  .results-header {
+    padding: 14px 20px; border-bottom: 1px solid #f3f4f6;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .results-header h6 { margin: 0; font-weight: 600; font-size: 14px; }
+  .result-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 20px; border-bottom: 1px solid #f9fafb;
+    font-size: 13px; transition: background .1s;
+  }
+  .result-row:last-child { border: none; }
+  .result-row:hover { background: #fafafa; }
+  .result-icon { width: 28px; text-align: center; flex-shrink: 0; }
+  .result-name { flex: 1; font-weight: 500; }
+  .result-url  { font-size: 11px; color: #9ca3af; }
+  .result-score { font-weight: 700; font-size: 14px; min-width: 60px; text-align: right; }
+  .result-priority { min-width: 80px; text-align: right; }
+  .result-error { font-size: 11px; color: #ef4444; flex: 1; }
+
+  /* ── Score colors ── */
+  .score-hot  { color: #ef4444; }
+  .score-warm { color: #f59e0b; }
+  .score-cold { color: #9ca3af; }
+
+  /* ── Action buttons ── */
+  .action-bar {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 20px 24px; display: flex; gap: 12px; align-items: center;
+    flex-wrap: wrap;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="job-wrap">
+
+  {% if job is None %}
+  <!-- Job non trovato -->
+  <div class="text-center py-5">
+    <i class="bi bi-question-circle fs-1 text-muted opacity-50 d-block mb-3"></i>
+    <h5 class="text-muted">Job non trovato</h5>
+    <p class="text-muted small">Il job potrebbe essere scaduto o non esistere.</p>
+    <a href="{% url 'stores:store_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Torna agli store
+    </a>
+  </div>
+
+  {% else %}
+
+  <!-- ── Status Hero ── -->
+  <div class="status-hero" id="status-hero">
+    <div class="status-icon running" id="status-icon">
+      <span id="status-emoji">⚙️</span>
+    </div>
+    <div style="flex:1">
+      <div class="status-label">
+        {% if job.type == 'bulk' %}Analisi bulk — {{ job.total }} store{% else %}Analisi singolo store{% endif %}
+      </div>
+      <div class="status-title" id="status-title">In corso...</div>
+      <div class="status-sub" id="status-sub">Avvio analisi in background</div>
+    </div>
+    <!-- Contatori (solo bulk) -->
+    {% if job.type == 'bulk' %}
+    <div class="d-flex gap-3 flex-shrink-0">
+      <div class="text-center">
+        <div style="font-size:22px;font-weight:800;color:#7c3aed" id="cnt-completed">0</div>
+        <div style="font-size:10px;color:#9ca3af;text-transform:uppercase">Completati</div>
+      </div>
+      <div class="text-center">
+        <div style="font-size:22px;font-weight:800;color:#22c55e" id="cnt-success">0</div>
+        <div style="font-size:10px;color:#9ca3af;text-transform:uppercase">OK</div>
+      </div>
+      <div class="text-center">
+        <div style="font-size:22px;font-weight:800;color:#ef4444" id="cnt-errors">0</div>
+        <div style="font-size:10px;color:#9ca3af;text-transform:uppercase">Errori</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Progress bar (bulk) ── -->
+  {% if job.type == 'bulk' %}
+  <div class="mb-4" id="progress-section">
+    <div class="progress-wrap">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+    <div class="progress-label mt-1">
+      <span id="progress-text">0 / {{ job.total }}</span>
+      <span id="progress-pct">0%</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Store corrente ── -->
+  <div class="current-store" id="current-store">
+    <div class="spinner-border" role="status" id="current-spinner"></div>
+    <div>
+      <div id="current-name" style="font-weight:600">Inizializzazione...</div>
+      <div class="url" id="current-url">—</div>
+    </div>
+  </div>
+
+  <!-- ── Log Console ── -->
+  <div class="log-console">
+    <div class="log-header">
+      <span>📟 Log live</span>
+      <span id="log-count" style="color:#6b6b80;font-size:11px">0 righe</span>
+    </div>
+    <div class="log-body" id="log-body">
+      <div class="log-line">
+        <span class="log-time">--:--:--</span>
+        <span class="log-msg info">In attesa di log...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Risultati ── -->
+  <div class="results-card" id="results-card" style="{% if not job.results %}display:none{% endif %}">
+    <div class="results-header">
+      <h6><i class="bi bi-list-check me-2 text-success"></i>Risultati</h6>
+      <small class="text-muted" id="results-count">0 store</small>
+    </div>
+    <div id="results-body"></div>
+  </div>
+
+  <!-- ── Action bar (visibile solo a completamento) ── -->
+  <div class="action-bar" id="action-bar" style="display:none">
+    <i class="bi bi-check-circle text-success fs-5"></i>
+    <span id="action-summary" style="flex:1;font-size:14px"></span>
+    <a href="{% url 'stores:store_list' %}?status=analyzed" class="btn btn-primary btn-sm" id="btn-go">
+      <i class="bi bi-arrow-right me-1"></i>Vai agli store analizzati
+    </a>
+    <a href="{% url 'stores:store_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-shop me-1"></i>Tutti gli store
+    </a>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if job %}
+<script>
+const JOB_ID      = "{{ job_id }}";
+const JOB_TYPE    = "{{ job.type }}";
+const TOTAL       = {{ job.total }};
+const API_URL     = "{% url 'analyzer:job_status_api' job_id %}";
+const POLL_MS     = 2000;
+
+let lastLogCount  = 0;
+let isCompleted   = false;
+let pollTimer     = null;
+
+// ── Rendering log ──────────────────────────────────────────
+function renderLogs(logs) {
+  if (logs.length === lastLogCount) return;
+  lastLogCount = logs.length;
+
+  const body = document.getElementById('log-body');
+  body.innerHTML = logs.map(l => `
+    <div class="log-line">
+      <span class="log-time">${l.time}</span>
+      <span class="log-msg ${l.level}">${escapeHtml(l.msg)}</span>
+    </div>
+  `).join('');
+  body.scrollTop = body.scrollHeight;
+
+  document.getElementById('log-count').textContent = logs.length + ' righe';
+}
+
+// ── Rendering risultati ────────────────────────────────────
+function renderResults(results) {
+  const card  = document.getElementById('results-card');
+  const body  = document.getElementById('results-body');
+  const count = document.getElementById('results-count');
+
+  if (results.length === 0) return;
+  card.style.display = '';
+  count.textContent  = results.length + ' store';
+
+  body.innerHTML = results.map(r => {
+    if (r.success) {
+      const scoreClass = r.score >= 70 ? 'score-hot' : r.score >= 50 ? 'score-warm' : 'score-cold';
+      const priorityBadge = r.priority.includes('HOT')
+        ? '<span class="badge bg-danger bg-opacity-75">🔥 HOT</span>'
+        : r.priority.includes('WARM')
+          ? '<span class="badge bg-warning text-dark">🌟 WARM</span>'
+          : '<span class="badge bg-secondary">❄️ COLD</span>';
+      return `
+        <div class="result-row">
+          <div class="result-icon">✅</div>
+          <div class="result-name">
+            ${escapeHtml(r.name)}
+            <div class="result-url">${escapeHtml(r.url)}</div>
+          </div>
+          <div class="result-priority">${priorityBadge}</div>
+          <div class="result-score ${scoreClass}">${r.score}/100</div>
+        </div>`;
+    } else {
+      return `
+        <div class="result-row">
+          <div class="result-icon">❌</div>
+          <div class="result-name">${escapeHtml(r.name)}</div>
+          <div class="result-error">${escapeHtml(r.error || 'Errore sconosciuto')}</div>
+        </div>`;
+    }
+  }).join('');
+}
+
+// ── Aggiorna UI con dati job ───────────────────────────────
+function updateUI(data) {
+  // Contatori bulk
+  if (JOB_TYPE === 'bulk') {
+    document.getElementById('cnt-completed').textContent = data.completed;
+    document.getElementById('cnt-success').textContent   = data.success;
+    document.getElementById('cnt-errors').textContent    = data.errors;
+
+    const pct = TOTAL > 0 ? Math.round((data.completed / TOTAL) * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = `${data.completed} / ${TOTAL}`;
+    document.getElementById('progress-pct').textContent  = pct + '%';
+  }
+
+  // Store corrente
+  if (data.current_name && data.status === 'running') {
+    document.getElementById('current-name').textContent = data.current_name;
+    document.getElementById('current-url').textContent  = data.current_url || '';
+  }
+
+  // Log
+  renderLogs(data.logs || []);
+
+  // Risultati
+  renderResults(data.results || []);
+
+  // Status hero
+  if (data.status === 'completed') {
+    onCompleted(data);
+  } else if (data.status === 'error') {
+    onError(data);
+  }
+}
+
+// ── Completamento ──────────────────────────────────────────
+function onCompleted(data) {
+  if (isCompleted) return;
+  isCompleted = true;
+  clearInterval(pollTimer);
+
+  // Aggiorna hero
+  const icon = document.getElementById('status-icon');
+  icon.className = 'status-icon completed';
+  document.getElementById('status-emoji').textContent = '✅';
+  document.getElementById('status-title').textContent = 'Analisi completata';
+
+  const sub = JOB_TYPE === 'bulk'
+    ? `${data.success} store analizzati con successo, ${data.errors} errori`
+    : 'Store analizzato con successo';
+  document.getElementById('status-sub').textContent = sub;
+
+  // Nascondi spinner store corrente
+  document.getElementById('current-spinner').style.display = 'none';
+  document.getElementById('current-name').textContent = '—';
+  document.getElementById('current-url').textContent  = '';
+
+  // Mostra action bar
+  const actionBar = document.getElementById('action-bar');
+  const summary   = document.getElementById('action-summary');
+  actionBar.style.display = '';
+  summary.textContent = JOB_TYPE === 'bulk'
+    ? `Completato — ${data.success}/${TOTAL} store analizzati con successo`
+    : 'Analisi completata con successo';
+
+  // Se singolo store → redirect automatico al report dopo 2s
+  if (JOB_TYPE === 'single' && data.redirect_url) {
+    summary.textContent += ' — reindirizzamento...';
+    document.getElementById('btn-go').href = data.redirect_url;
+    setTimeout(() => { window.location.href = data.redirect_url; }, 2000);
+  } else if (data.redirect_url) {
+    document.getElementById('btn-go').href = data.redirect_url;
+  }
+}
+
+// ── Errore fatale ──────────────────────────────────────────
+function onError(data) {
+  if (isCompleted) return;
+  isCompleted = true;
+  clearInterval(pollTimer);
+
+  const icon = document.getElementById('status-icon');
+  icon.className = 'status-icon error';
+  document.getElementById('status-emoji').textContent = '❌';
+  document.getElementById('status-title').textContent = 'Errore analisi';
+  document.getElementById('status-sub').textContent   = 'Controlla i log per i dettagli';
+  document.getElementById('current-spinner').style.display = 'none';
+}
+
+// ── Polling ────────────────────────────────────────────────
+async function poll() {
+  try {
+    const res  = await fetch(API_URL);
+    const data = await res.json();
+    updateUI(data);
+  } catch (e) {
+    console.warn('Poll error:', e);
+  }
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ── Avvio ──────────────────────────────────────────────────
+// Salva il job_id in sessionStorage così il banner
+// sulla store_list può fare polling anche dopo aver
+// navigato via da questa pagina.
+sessionStorage.setItem('active_job_id', JOB_ID);
+
+poll();  // prima chiamata immediata
+pollTimer = setInterval(poll, POLL_MS);
+</script>
+{% endif %}
+{% endblock %}

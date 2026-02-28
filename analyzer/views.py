@@ -1,68 +1,140 @@
-import json
-from django.shortcuts import redirect, get_object_or_404, render
-from django.contrib import messages
-from stores.models import Store, StoreAnalysis
-from .services import run_analysis
+"""
+analyzer/views.py
 
+Views aggiornate con analisi asincrona.
+analyze_store e analyze_all lanciano thread in background
+e reindirizzano alla pagina job_status con log live.
+"""
+
+import json
+import threading
+from django.shortcuts import redirect, get_object_or_404, render
+from django.http import JsonResponse
+from stores.models import Store, StoreAnalysis
+from . import job_manager
+from .services import run_single_analysis_thread, run_bulk_analysis_thread
+
+
+# ─────────────────────────────────────────────
+# ANALISI SINGOLO STORE (asincrona)
+# ─────────────────────────────────────────────
 
 def analyze_store(request, pk):
     store = get_object_or_404(Store, pk=pk)
-    if request.method == 'POST':
-        result = run_analysis(store)
-        if result['success']:
-            messages.success(request,
-                f"Analisi completata — Lead Score: {result['analysis'].lead_score}/100 "
-                f"({result['analysis'].lead_priority})")
-        else:
-            messages.error(request, f"Errore analisi: {result['error']}")
-    return redirect('stores:store_detail', pk=pk)
+    if request.method != 'POST':
+        return redirect('stores:store_detail', pk=pk)
 
+    job_id = job_manager.create_job(job_type='single', total=1)
+
+    # Salva store_pk nel job per il redirect finale
+    job = job_manager._jobs.get(job_id)
+    if job:
+        job['store_pk'] = store.pk
+
+    # Lancia il thread
+    t = threading.Thread(
+        target=run_single_analysis_thread,
+        args=(store, job_id),
+        daemon=True,
+    )
+    t.start()
+
+    return redirect('analyzer:job_status', job_id=job_id)
+
+
+# ─────────────────────────────────────────────
+# ANALISI BULK (asincrona)
+# ─────────────────────────────────────────────
 
 def analyze_all(request):
     if request.method != 'POST':
         return redirect('stores:store_list')
 
-    stores_to_analyze = Store.objects.filter(status=Store.Status.NEW)
-    total = stores_to_analyze.count()
+    stores_qs = Store.objects.filter(status=Store.Status.NEW)
+    total     = stores_qs.count()
 
     if total == 0:
+        from django.contrib import messages
         messages.info(request, "Nessuno store da analizzare.")
         return redirect('stores:store_list')
 
-    success_count = 0
-    error_count   = 0
-    errors        = []
+    job_id = job_manager.create_job(job_type='bulk', total=total)
 
-    for store in stores_to_analyze:
-        result = run_analysis(store)
-        if result['success']:
-            success_count += 1
+    t = threading.Thread(
+        target=run_bulk_analysis_thread,
+        args=(stores_qs, job_id),
+        daemon=True,
+    )
+    t.start()
+
+    return redirect('analyzer:job_status', job_id=job_id)
+
+
+# ─────────────────────────────────────────────
+# PAGINA STATUS (con polling live)
+# ─────────────────────────────────────────────
+
+def job_status(request, job_id):
+    job = job_manager.get_job(job_id)
+    if job is None:
+        return render(request, 'analyzer/job_status.html', {
+            'job': None,
+            'job_id': job_id,
+        })
+    return render(request, 'analyzer/job_status.html', {
+        'job':    job,
+        'job_id': job_id,
+    })
+
+
+# ─────────────────────────────────────────────
+# API POLLING (JSON)
+# ─────────────────────────────────────────────
+
+def job_status_api(request, job_id):
+    """Endpoint JSON per il polling JS."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        return JsonResponse({'error': 'Job non trovato'}, status=404)
+
+    # Calcola redirect URL per quando il job è completato
+    redirect_url = None
+    if job['status'] == 'completed':
+        if job['type'] == 'single' and job.get('analysis_pk'):
+            redirect_url = f"/analyzer/report/{job['analysis_pk']}/"
+        elif job['type'] == 'single' and job.get('store_pk'):
+            redirect_url = f"/stores/{job['store_pk']}/"
         else:
-            error_count += 1
-            errors.append(f"{store.url}: {result['error']}")
+            redirect_url = '/stores/'
 
-    if success_count > 0:
-        messages.success(request,
-            f"Analisi completata — {success_count} analizzati, {error_count} errori su {total} totali.")
-    if errors:
-        messages.warning(request, "Errori: " + " | ".join(errors[:3]))
+    return JsonResponse({
+        'status':       job['status'],
+        'type':         job['type'],
+        'total':        job['total'],
+        'completed':    job['completed'],
+        'success':      job['success'],
+        'errors':       job['errors'],
+        'current_url':  job['current_url'],
+        'current_name': job['current_name'],
+        'logs':         job['logs'][-50:],   # ultimi 50 log
+        'results':      job['results'],
+        'redirect_url': redirect_url,
+        'finished_at':  job['finished_at'],
+    })
 
-    return redirect('stores:store_list')
 
+# ─────────────────────────────────────────────
+# REPORT ANALISI (invariato)
+# ─────────────────────────────────────────────
 
 def analysis_report(request, pk):
-    """
-    Pagina report completa per una singola analisi — sostituisce il vecchio HTML.
-    """
     analysis = get_object_or_404(StoreAnalysis, pk=pk)
     store    = analysis.store
 
     raw            = analysis.raw_json or {}
     img_results    = raw.get('img_results', [])
     lead_breakdown = raw.get('lead_breakdown', {})
-    # DEBUG — rimuovi dopo
-    print(f"raw keys: {list(raw.keys())}")
-    print(f"img_results count: {len(img_results)}")
+
     prod_imgs  = [r for r in img_results if r and not r.get('is_extra') and not r.get('error')]
     extra_imgs = [r for r in img_results if r and r.get('is_extra')     and not r.get('error')]
 

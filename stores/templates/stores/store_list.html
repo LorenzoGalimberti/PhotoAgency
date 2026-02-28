@@ -3,7 +3,54 @@
 {% block nav_stores %}active{% endblock %}
 {% block page_title %}Store{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* ── Banner job attivo ── */
+  #active-job-banner {
+    display: none;
+    background: linear-gradient(90deg, #1e1b2e, #2d2840);
+    border: 1px solid #4c4870;
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    align-items: center;
+    gap: 16px;
+  }
+  #active-job-banner .pulse {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #a78bfa; flex-shrink: 0;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: .4; transform: scale(.8); }
+  }
+  #active-job-banner .job-text { flex: 1; }
+  #active-job-banner .job-title { color: #fff; font-size: 13px; font-weight: 600; }
+  #active-job-banner .job-sub   { color: #a78bfa; font-size: 12px; margin-top: 2px; }
+  #active-job-banner .btn-live  {
+    background: #7c3aed; color: #fff; border: none;
+    padding: 6px 16px; border-radius: 6px; font-size: 12px;
+    font-weight: 600; text-decoration: none; white-space: nowrap;
+    transition: background .15s;
+  }
+  #active-job-banner .btn-live:hover { background: #6d28d9; color: #fff; }
+</style>
+{% endblock %}
+
 {% block content %}
+
+<!-- ── Banner job attivo (nascosto di default, JS lo mostra) ── -->
+<div id="active-job-banner">
+  <div class="pulse"></div>
+  <div class="job-text">
+    <div class="job-title" id="banner-title">Analisi in corso...</div>
+    <div class="job-sub"   id="banner-sub">—</div>
+  </div>
+  <a href="#" id="banner-link" class="btn-live">
+    <i class="bi bi-activity me-1"></i>Vedi live →
+  </a>
+</div>
 
 <!-- Barra filtri -->
 <div class="card border-0 shadow-sm mb-4">
@@ -191,4 +238,84 @@
   {% endif %}
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Polling job attivo ─────────────────────────────────────
+// Salviamo il job_id attivo in sessionStorage quando viene creato.
+// Il banner legge da sessionStorage e fa polling sull'API.
+
+const banner    = document.getElementById('active-job-banner');
+const banTitle  = document.getElementById('banner-title');
+const banSub    = document.getElementById('banner-sub');
+const banLink   = document.getElementById('banner-link');
+
+let pollTimer   = null;
+let activeJobId = sessionStorage.getItem('active_job_id');
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  sessionStorage.removeItem('active_job_id');
+  banner.style.display = 'none';
+}
+
+async function checkJob() {
+  if (!activeJobId) return;
+
+  try {
+    const res  = await fetch(`/analyzer/job/${activeJobId}/api/`);
+    if (!res.ok) { stopPolling(); return; }
+
+    const data = await res.json();
+
+    if (data.status === 'running') {
+      // Mostra banner
+      banner.style.display = 'flex';
+      banLink.href = `/analyzer/job/${activeJobId}/`;
+
+      if (data.type === 'bulk') {
+        const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+        banTitle.textContent = `Analisi bulk in corso — ${data.completed}/${data.total} store (${pct}%)`;
+        banSub.textContent   = data.current_name
+          ? `⟳ Sto analizzando: ${data.current_name}`
+          : 'Inizializzazione...';
+      } else {
+        banTitle.textContent = 'Analisi store in corso...';
+        banSub.textContent   = data.current_name
+          ? `⟳ ${data.current_name}`
+          : 'Avvio analisi...';
+      }
+
+    } else {
+      // Job completato o errore → ferma polling e nascondi
+      stopPolling();
+    }
+
+  } catch (e) {
+    // Errore di rete — non fare nulla, riprova al prossimo tick
+  }
+}
+
+// Avvia polling solo se c'è un job attivo in sessionStorage
+if (activeJobId) {
+  checkJob();
+  pollTimer = setInterval(checkJob, 3000);
+}
+
+// ── Intercetta i form di analisi per salvare il job_id ─────
+// Quando viene fatto il redirect a /analyzer/job/<id>/,
+// salviamo l'id in sessionStorage così il banner funziona
+// anche tornando sulla store_list.
+//
+// Soluzione: intercettiamo il form submit e leggiamo
+// l'header Location dalla risposta fetch — ma siccome
+// Django fa redirect server-side, usiamo un approccio
+// diverso: salviamo in sessionStorage dal job_status.html
+// (vedi sotto) e qui leggiamo.
+//
+// Il job_status.html salva il job_id con:
+//   sessionStorage.setItem('active_job_id', JOB_ID);
+// Qui sopra lo leggiamo e facciamo polling.
+</script>
 {% endblock %}

@@ -2,6 +2,7 @@
 analyzer/services.py
 
 Lancia shopify_complete.py come subprocess e salva i risultati nel DB.
+Versione asincrona: supporta job_id per log live via job_manager.
 """
 
 import subprocess
@@ -11,19 +12,28 @@ import json
 from pathlib import Path
 from django.conf import settings
 from stores.models import Store, StoreAnalysis
+from . import job_manager
 
 
-def run_analysis(store: Store) -> dict:
+def run_analysis(store: Store, job_id: str = None) -> dict:
     """
     Lancia l'analisi su un singolo store.
+    Se job_id è fornito, logga in tempo reale nel job_manager.
     Ritorna dict con success, messaggio e StoreAnalysis creata.
     """
+
+    def log(msg, level='info'):
+        if job_id:
+            job_manager.add_log(job_id, msg, level)
+
     script_path = Path(settings.BASE_DIR) / 'scripts' / 'shopify_complete.py'
     output_dir  = Path(settings.MEDIA_ROOT) / 'reports'
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if not script_path.exists():
-        return {'success': False, 'error': f"Script non trovato: {script_path}"}
+        err = f"Script non trovato: {script_path}"
+        log(err, 'error')
+        return {'success': False, 'error': err}
 
     env = os.environ.copy()
     env['PYTHONIOENCODING'] = 'utf-8'
@@ -36,6 +46,8 @@ def run_analysis(store: Store) -> dict:
         '--output', str(output_dir),
     ]
 
+    log(f'Avvio analisi: {store.url}')
+
     try:
         proc = subprocess.run(
             cmd,
@@ -46,19 +58,26 @@ def run_analysis(store: Store) -> dict:
             env=env,
         )
 
-        # Cerca la riga RESULT_JSON nell'output
+        # Parsa i log dello script e li riversa nel job_manager
         result_data = None
         for line in proc.stdout.splitlines():
             if line.startswith('RESULT_JSON:'):
                 result_data = json.loads(line[len('RESULT_JSON:'):])
-                break
+            elif line.startswith('[analyzer]'):
+                # Log live dallo script
+                msg = line.replace('[analyzer]', '').strip()
+                level = 'error' if 'errore' in msg.lower() or 'error' in msg.lower() else 'info'
+                log(msg, level)
 
         if result_data is None:
             err = proc.stderr[-400:] if proc.stderr else 'Nessun output JSON trovato'
+            log(f'Analisi fallita: {err}', 'error')
             return {'success': False, 'error': err}
 
         if not result_data.get('success'):
-            return {'success': False, 'error': result_data.get('error', 'Errore sconosciuto')}
+            err = result_data.get('error', 'Errore sconosciuto')
+            log(f'Store non valido: {err}', 'warn')
+            return {'success': False, 'error': err}
 
         # Salva StoreAnalysis nel DB
         analysis = StoreAnalysis.objects.create(
@@ -107,6 +126,10 @@ def run_analysis(store: Store) -> dict:
 
         store.save(update_fields=updated_fields)
 
+        score    = result_data['lead_score']
+        priority = result_data['lead_priority']
+        log(f"Completato — Score: {score}/100 ({priority}) — {result_data['duration_s']}s", 'success')
+
         return {
             'success':  True,
             'analysis': analysis,
@@ -114,6 +137,83 @@ def run_analysis(store: Store) -> dict:
         }
 
     except subprocess.TimeoutExpired:
-        return {'success': False, 'error': 'Timeout — analisi oltre 2 minuti'}
+        err = 'Timeout — analisi oltre 2 minuti'
+        log(err, 'error')
+        return {'success': False, 'error': err}
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        err = str(e)
+        log(f'Eccezione: {err}', 'error')
+        return {'success': False, 'error': err}
+
+
+def run_bulk_analysis_thread(stores_qs, job_id: str):
+    """
+    Esegue l'analisi bulk in un thread separato.
+    Aggiorna job_manager ad ogni store completato.
+    """
+    stores = list(stores_qs)
+
+    job_manager.add_log(job_id, f'Avvio analisi bulk: {len(stores)} store da processare', 'info')
+
+    for store in stores:
+        name = store.name or store.domain or store.url
+        job_manager.set_current(job_id, store.url, name)
+        job_manager.add_log(job_id, f'→ {name} ({store.url})', 'info')
+
+        result = run_analysis(store, job_id=job_id)
+
+        if result['success']:
+            analysis = result['analysis']
+            job_manager.mark_store_done(
+                job_id,
+                url=store.url,
+                name=name,
+                success=True,
+                score=analysis.lead_score,
+                priority=analysis.lead_priority,
+            )
+        else:
+            job_manager.mark_store_done(
+                job_id,
+                url=store.url,
+                name=name,
+                success=False,
+                error=result['error'],
+            )
+
+    job_manager.complete_job(job_id)
+    job_manager.add_log(job_id, 'Analisi bulk completata.', 'success')
+    job_manager.cleanup_old_jobs()
+
+
+def run_single_analysis_thread(store: Store, job_id: str):
+    """
+    Esegue l'analisi di un singolo store in un thread separato.
+    """
+    name = store.name or store.domain or store.url
+    job_manager.set_current(job_id, store.url, name)
+    job_manager.add_log(job_id, f'Analisi store: {name}', 'info')
+
+    result = run_analysis(store, job_id=job_id)
+
+    if result['success']:
+        analysis = result['analysis']
+        job_manager.mark_store_done(
+            job_id,
+            url=store.url,
+            name=name,
+            success=True,
+            score=analysis.lead_score,
+            priority=analysis.lead_priority,
+        )
+        job_manager.complete_job(job_id, analysis_pk=analysis.pk)
+    else:
+        job_manager.mark_store_done(
+            job_id,
+            url=store.url,
+            name=name,
+            success=False,
+            error=result['error'],
+        )
+        job_manager.fail_job(job_id, result['error'])
+        
