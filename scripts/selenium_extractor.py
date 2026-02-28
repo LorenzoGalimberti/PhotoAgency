@@ -62,16 +62,17 @@ def setup_driver(headless=False):
         return None
 
 
-def search_google(driver, query, pages=3):
+def search_google(driver, query, page_from=1, page_to=3):
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
 
-    print(f"\n[>] Cerco: {query} ({pages} pagine)")
+    print(f"\n[>] Cerco: {query} (pagine {page_from}→{page_to})")
     urls_found = []
 
-    for page in range(pages):
+    for page in range(1, page_to + 1):
+
         try:
-            if page == 0:
+            if page == 1:
                 # Prima pagina — cerca normalmente
                 driver.get("https://www.google.com")
                 time.sleep(2)
@@ -109,7 +110,12 @@ def search_google(driver, query, pages=3):
                     print(f"   [!] Nessuna pagina successiva — stop ({e})")
                     break
 
-            print(f"   [pagina {page+1}/{pages}]")
+            # ✅ Salta le pagine prima di page_from
+            if page < page_from:
+                print(f"   [skip pagina {page} — sotto il range richiesto]")
+                continue
+
+            print(f"   [pagina {page}/{page_to}]")
 
             # Raccoglie URL dalla pagina corrente
             new_found = 0
@@ -125,10 +131,10 @@ def search_google(driver, query, pages=3):
                 except:
                     continue
 
-            print(f"   [=] {new_found} nuovi da pagina {page+1}")
+            print(f"   [=] {new_found} nuovi da pagina {page}")
 
         except Exception as e:
-            print(f"   [!] Errore pagina {page+1}: {e}")
+            print(f"   [!] Errore pagina {page}: {e}")
             break
 
     print(f"   [=] Totale da questa query: {len(urls_found)}")
@@ -164,11 +170,13 @@ def save_results(urls, output_file=OUTPUT_FILE):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--queries',  type=str, default=None)
-    parser.add_argument('--headless', action='store_true')
-    parser.add_argument('--output',   type=str, default=str(OUTPUT_FILE))
-    parser.add_argument('--pages',    type=int, default=3,
-                        help='Numero pagine Google per query')
+    parser.add_argument('--queries',   type=str, default=None)
+    parser.add_argument('--headless',  action='store_true')
+    parser.add_argument('--output',    type=str, default=str(OUTPUT_FILE))
+    parser.add_argument('--page-from', type=int, default=1,
+                        help='Pagina Google da cui iniziare')   # ✅ NUOVO
+    parser.add_argument('--page-to',   type=int, default=3,
+                        help='Pagina Google fino a cui arrivare')  # ✅ NUOVO
     args = parser.parse_args()
 
     if args.queries:
@@ -180,7 +188,7 @@ def main():
     print("SHOPIFY URL EXTRACTOR")
     print("=" * 60)
     print(f"Query:    {len(queries)}")
-    print(f"Pagine:   {args.pages} per query")
+    print(f"Pagine:   {args.page_from} → {args.page_to}")   # ✅ aggiornato
     print(f"Modalita: {'Headless' if args.headless else 'Visibile'}")
     print(f"Output:   {args.output}")
     print()
@@ -194,7 +202,9 @@ def main():
     try:
         for i, query in enumerate(queries, 1):
             print(f"\n-- QUERY {i}/{len(queries)} --")
-            urls = search_google(driver, query, pages=args.pages)
+            urls = search_google(driver, query,
+                                 page_from=args.page_from,
+                                 page_to=args.page_to)    # ✅ aggiornato
             all_urls.update(urls)
             print(f"[=] Totale progressivo: {len(all_urls)} store unici")
 

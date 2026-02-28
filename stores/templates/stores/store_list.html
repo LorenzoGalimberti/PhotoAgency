@@ -80,7 +80,6 @@
   <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
     <h6 class="mb-0 fw-semibold">{{ stores.paginator.count }} store trovati</h6>
     <div class="d-flex gap-2">
-      <!-- Analizza tutti gli store NEW -->
       <form method="post" action="{% url 'analyzer:analyze_all' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-sm btn-success"
@@ -161,15 +160,17 @@
           <a class="page-link" href="?page={{ stores.previous_page_number }}&status={{ filter_status }}&niche={{ filter_niche }}&email={{ filter_email }}&sort={{ filter_sort }}">&laquo;</a>
         </li>
         {% endif %}
+
         {% for num in stores.paginator.page_range %}
           {% if stores.number == num %}
-          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-          {% elif num > stores.number|add:'-3' and num < stores.number|add:'3' %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ num }}&status={{ filter_status }}&niche={{ filter_niche }}&email={{ filter_email }}&sort={{ filter_sort }}">{{ num }}</a>
-          </li>
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% elif num >= page_range_start and num <= page_range_end %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}&status={{ filter_status }}&niche={{ filter_niche }}&email={{ filter_email }}&sort={{ filter_sort }}">{{ num }}</a>
+            </li>
           {% endif %}
         {% endfor %}
+
         {% if stores.has_next %}
         <li class="page-item">
           <a class="page-link" href="?page={{ stores.next_page_number }}&status={{ filter_status }}&niche={{ filter_niche }}&email={{ filter_email }}&sort={{ filter_sort }}">&raquo;</a>

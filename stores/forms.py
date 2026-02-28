@@ -62,16 +62,18 @@ class SeleniumSearchForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
-    pages = forms.ChoiceField(
-        label='Pagine Google per query',
+    # ✅ NUOVO: range pagine
+    page_from = forms.ChoiceField(
+        label='Dalla pagina',
+        initial='1',
+        choices=[(str(i), f'Pagina {i}') for i in range(1, 11)],
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    page_to = forms.ChoiceField(
+        label='Alla pagina',
         initial='3',
-        choices=[
-            ('1',  '1 pagina  (~10 risultati)'),
-            ('2',  '2 pagine  (~20 risultati)'),
-            ('3',  '3 pagine  (~30 risultati)'),
-            ('5',  '5 pagine  (~50 risultati)'),
-            ('10', '10 pagine (~100 risultati)'),
-        ],
+        choices=[(str(i), f'Pagina {i}') for i in range(1, 11)],
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
@@ -90,4 +92,13 @@ class SeleniumSearchForm(forms.Form):
         help_text='Se attivo, Chrome non si apre visualmente',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
-    
+
+    def clean(self):
+        cleaned = super().clean()
+        page_from = int(cleaned.get('page_from', 1))
+        page_to   = int(cleaned.get('page_to', 3))
+        if page_from > page_to:
+            raise forms.ValidationError(
+                '"Dalla pagina" non può essere maggiore di "Alla pagina".'
+            )
+        return cleaned

@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import os
@@ -10,14 +11,14 @@ from django.core.paginator import Paginator
 
 from .forms import ImportStoresForm, SeleniumSearchForm
 from .services import import_stores_from_content
-from .models import Store, StoreAnalysis
+from .models import Store, StoreAnalysis, NicheQueryTemplate
 
 
 def dashboard(request):
-    total     = Store.objects.count()
-    hot       = StoreAnalysis.objects.filter(lead_priority__icontains='HOT').values('store').distinct().count()
-    analyzed  = Store.objects.filter(status=Store.Status.ANALYZED).count()
-    contacted = Store.objects.filter(status=Store.Status.CONTACTED).count()
+    total         = Store.objects.count()
+    hot           = StoreAnalysis.objects.filter(lead_priority__icontains='HOT').values('store').distinct().count()
+    analyzed      = Store.objects.filter(status=Store.Status.ANALYZED).count()
+    contacted     = Store.objects.filter(status=Store.Status.CONTACTED).count()
     recent_stores = Store.objects.order_by('-discovered_at')[:5]
 
     return render(request, 'stores/dashboard.html', {
@@ -48,8 +49,7 @@ def import_stores(request):
                 content += '\n' + form.cleaned_data['urls_text']
 
             if not content.strip():
-                messages.error(request,
-                    "Inserisci un file oppure incolla almeno un URL.")
+                messages.error(request, "Inserisci un file oppure incolla almeno un URL.")
                 return redirect('stores:import_stores')
 
             result = import_stores_from_content(
@@ -90,6 +90,11 @@ def import_stores(request):
 
 
 def run_selenium(request):
+    # ✅ Costruisce mappa nicchia → query dal DB
+    niche_queries = {}
+    for t in NicheQueryTemplate.objects.filter(active=True):
+        niche_queries[t.niche] = t.queries_list()
+
     if request.method == 'POST':
         form = SeleniumSearchForm(request.POST)
         if form.is_valid():
@@ -97,7 +102,8 @@ def run_selenium(request):
             niche        = form.cleaned_data['niche']
             headless     = form.cleaned_data['headless']
             source_label = form.cleaned_data.get('source_label', '')
-            pages        = int(form.cleaned_data.get('pages', 3))
+            page_from    = int(form.cleaned_data['page_from'])
+            page_to      = int(form.cleaned_data['page_to'])
 
             query_list  = [q.strip() for q in queries.splitlines() if q.strip()]
             queries_arg = '|'.join(query_list)
@@ -110,9 +116,10 @@ def run_selenium(request):
                 return redirect('stores:run_selenium')
 
             cmd = [sys.executable, str(script_path),
-                   '--queries', queries_arg,
-                   '--output',  str(output_file),
-                   '--pages',   str(pages)]
+                   '--queries',   queries_arg,
+                   '--output',    str(output_file),
+                   '--page-from', str(page_from),
+                   '--page-to',   str(page_to)]
             if headless:
                 cmd.append('--headless')
 
@@ -164,7 +171,9 @@ def run_selenium(request):
 
     import_result = request.session.pop('import_result', None)
     return render(request, 'stores/run_selenium.html', {
-        'form': form, 'import_result': import_result,
+        'form':          form,
+        'import_result': import_result,
+        'niche_queries': json.dumps(niche_queries),  # ✅ passa al template come JSON
     })
 
 
@@ -196,6 +205,9 @@ def store_list(request):
     paginator = Paginator(qs, 20)
     stores    = paginator.get_page(request.GET.get('page', 1))
 
+    page_range_start = max(1, stores.number - 3)
+    page_range_end   = min(paginator.num_pages, stores.number + 3)
+
     counts = {
         'total':      Store.objects.count(),
         'new':        Store.objects.filter(status='new').count(),
@@ -206,14 +218,16 @@ def store_list(request):
     }
 
     return render(request, 'stores/store_list.html', {
-        'stores':         stores,
-        'counts':         counts,
-        'status_choices': Store.Status.choices,
-        'niche_choices':  Store.Niche.choices,
-        'filter_status':  status,
-        'filter_niche':   niche,
-        'filter_email':   email,
-        'filter_sort':    sort,
+        'stores':           stores,
+        'counts':           counts,
+        'status_choices':   Store.Status.choices,
+        'niche_choices':    Store.Niche.choices,
+        'filter_status':    status,
+        'filter_niche':     niche,
+        'filter_email':     email,
+        'filter_sort':      sort,
+        'page_range_start': page_range_start,
+        'page_range_end':   page_range_end,
     })
 
 
@@ -237,6 +251,5 @@ def change_status(request, pk):
         if new_status in dict(Store.Status.choices):
             store.status = new_status
             store.save(update_fields=['status'])
-            messages.success(request,
-                f"Stato aggiornato: {store.get_status_display()}")
+            messages.success(request, f"Stato aggiornato: {store.get_status_display()}")
     return redirect('stores:store_detail', pk=pk)

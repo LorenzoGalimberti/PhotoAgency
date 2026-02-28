@@ -26,20 +26,36 @@
           {% csrf_token %}
 
           <div class="mb-3">
-            <label class="form-label fw-semibold">{{ form.queries.label }}</label>
+            <label class="form-label fw-semibold">{{ form.niche.label }}</label>
+            {{ form.niche }}
+            <div class="form-text">Seleziona una nicchia per popolare le query automaticamente</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              {{ form.queries.label }}
+              <span id="badge-queries" class="badge bg-secondary ms-1" style="display:none"></span>
+            </label>
             {{ form.queries }}
             <div class="form-text">{{ form.queries.help_text }}</div>
           </div>
 
           <div class="mb-3">
-            <label class="form-label fw-semibold">{{ form.niche.label }}</label>
-            {{ form.niche }}
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">{{ form.pages.label }}</label>
-            {{ form.pages }}
+            <label class="form-label fw-semibold">Pagine Google</label>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">{{ form.page_from.label }}</label>
+                {{ form.page_from }}
+              </div>
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">{{ form.page_to.label }}</label>
+                {{ form.page_to }}
+              </div>
+            </div>
             <div class="form-text">Più pagine = più risultati ma più tempo di attesa</div>
+            {% if form.non_field_errors %}
+            <div class="text-danger small mt-1">{{ form.non_field_errors }}</div>
+            {% endif %}
           </div>
 
           <div class="mb-3">
@@ -72,8 +88,9 @@
       </div>
       <div class="card-body" style="font-size:13px">
         <ol class="mb-0 ps-3">
-          <li class="mb-1">Django lancia lo script Selenium in background</li>
-          <li class="mb-1">Chrome apre Google e cerca ogni query su N pagine</li>
+          <li class="mb-1">Seleziona una nicchia — le query si popolano automaticamente</li>
+          <li class="mb-1">Puoi modificare le query a mano se vuoi</li>
+          <li class="mb-1">Chrome apre Google e cerca ogni query sul range di pagine scelto</li>
           <li class="mb-1">Gli URL trovati vengono salvati in <code>media/selenium_output.txt</code></li>
           <li class="mb-1">Django importa automaticamente i risultati nel DB</li>
           <li>Gli store già presenti vengono saltati (deduplicazione automatica)</li>
@@ -164,6 +181,37 @@
 
 {% block extra_js %}
 <script>
+  // ✅ Mappa nicchia → query dal DB (passata dal view)
+  const nicheQueries = {{ niche_queries|safe }};
+
+  const selectNiche  = document.getElementById('id_niche');
+  const textarea     = document.getElementById('id_queries');
+  const badge        = document.getElementById('badge-queries');
+
+  function popolaQuery() {
+    const niche   = selectNiche.value;
+    const queries = nicheQueries[niche];
+
+    if (queries && queries.length > 0) {
+      textarea.value = queries.join('\n');
+      badge.textContent = queries.length + ' query';
+      badge.style.display = 'inline';
+    } else {
+      // Nicchia senza template — svuota e nascondi badge
+      textarea.value = '';
+      badge.style.display = 'none';
+    }
+  }
+
+  // Popola al cambio nicchia
+  selectNiche.addEventListener('change', popolaQuery);
+
+  // Popola al caricamento se nicchia già selezionata
+  if (selectNiche.value) {
+    popolaQuery();
+  }
+
+  // Bottone submit
   document.querySelector('form').addEventListener('submit', function () {
     const btn = document.getElementById('btn-avvia');
     btn.disabled = true;
