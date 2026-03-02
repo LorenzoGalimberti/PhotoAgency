@@ -11,7 +11,7 @@ from django.core.paginator import Paginator
 
 from .forms import ImportStoresForm, SeleniumSearchForm
 from .services import import_stores_from_content
-from .models import Store, StoreAnalysis, NicheQueryTemplate
+from .models import Store, StoreAnalysis, NicheQueryTemplate, MessageTemplate
 
 
 def dashboard(request):
@@ -90,7 +90,6 @@ def import_stores(request):
 
 
 def run_selenium(request):
-    # ✅ Costruisce mappa nicchia → query dal DB
     niche_queries = {}
     for t in NicheQueryTemplate.objects.filter(active=True):
         niche_queries[t.niche] = t.queries_list()
@@ -173,7 +172,7 @@ def run_selenium(request):
     return render(request, 'stores/run_selenium.html', {
         'form':          form,
         'import_result': import_result,
-        'niche_queries': json.dumps(niche_queries),  # ✅ passa al template come JSON
+        'niche_queries': json.dumps(niche_queries),
     })
 
 
@@ -236,11 +235,34 @@ def store_detail(request, pk):
     analyses = store.analyses.order_by('-created_at')
     contacts = store.contact_logs.order_by('-sent_at')
 
+    # Carica template attivi e sostituisce variabili lato server
+    import re
+
+    def render_body(body):
+        def replace_var(m):
+            var = m.group(1).strip()
+            if var == 'store.name':
+                return store.name or store.domain
+            if var == 'store.domain':
+                return store.domain
+            if var == 'store.get_niche_display':
+                return store.get_niche_display()
+            return m.group(0)
+        return re.sub(r'\{\{\s*([\w.]+)\s*\}\}', replace_var, body)
+
+    msg_templates  = MessageTemplate.objects.filter(is_active=True)
+    templates_json = json.dumps([
+        {'id': t.pk, 'name': t.name, 'body': render_body(t.body), 'is_default': t.is_default}
+        for t in msg_templates
+    ])
+
     return render(request, 'stores/store_detail.html', {
-        'store':    store,
-        'analyses': analyses,
-        'contacts': contacts,
-        'latest':   analyses.first(),
+        'store':          store,
+        'analyses':       analyses,
+        'contacts':       contacts,
+        'latest':         analyses.first(),
+        'msg_templates':  msg_templates,
+        'templates_json': templates_json,
     })
 
 
@@ -253,3 +275,82 @@ def change_status(request, pk):
             store.save(update_fields=['status'])
             messages.success(request, f"Stato aggiornato: {store.get_status_display()}")
     return redirect('stores:store_detail', pk=pk)
+
+
+# ─── CRUD MessageTemplate ────────────────────────────────────────────────────
+
+def message_templates(request):
+    """Lista di tutti i template messaggi."""
+    templates = MessageTemplate.objects.all()
+    return render(request, 'stores/message_templates.html', {
+        'templates': templates,
+    })
+
+
+def message_template_create(request):
+    """Crea un nuovo template."""
+    if request.method == 'POST':
+        name       = request.POST.get('name', '').strip()
+        body       = request.POST.get('body', '').strip()
+        is_default = request.POST.get('is_default') == 'on'
+        is_active  = request.POST.get('is_active') == 'on'
+
+        if not name or not body:
+            messages.error(request, "Nome e testo sono obbligatori.")
+        else:
+            MessageTemplate.objects.create(
+                name=name, body=body,
+                is_default=is_default, is_active=is_active,
+            )
+            messages.success(request, f"Template \"{name}\" creato.")
+            return redirect('stores:message_templates')
+
+    return render(request, 'stores/message_template_form.html', {
+        'action': 'Crea', 'template': None,
+    })
+
+
+def message_template_edit(request, pk):
+    """Modifica un template esistente."""
+    tmpl = get_object_or_404(MessageTemplate, pk=pk)
+
+    if request.method == 'POST':
+        name       = request.POST.get('name', '').strip()
+        body       = request.POST.get('body', '').strip()
+        is_default = request.POST.get('is_default') == 'on'
+        is_active  = request.POST.get('is_active') == 'on'
+
+        if not name or not body:
+            messages.error(request, "Nome e testo sono obbligatori.")
+        else:
+            tmpl.name       = name
+            tmpl.body       = body
+            tmpl.is_default = is_default
+            tmpl.is_active  = is_active
+            tmpl.save()
+            messages.success(request, f"Template \"{name}\" aggiornato.")
+            return redirect('stores:message_templates')
+
+    return render(request, 'stores/message_template_form.html', {
+        'action': 'Modifica', 'template': tmpl,
+    })
+
+
+def message_template_delete(request, pk):
+    """Elimina un template (solo POST)."""
+    tmpl = get_object_or_404(MessageTemplate, pk=pk)
+    if request.method == 'POST':
+        name = tmpl.name
+        tmpl.delete()
+        messages.success(request, f"Template \"{name}\" eliminato.")
+    return redirect('stores:message_templates')
+
+
+def message_template_set_default(request, pk):
+    """Imposta un template come default (solo POST)."""
+    tmpl = get_object_or_404(MessageTemplate, pk=pk)
+    if request.method == 'POST':
+        tmpl.is_default = True
+        tmpl.save()
+        messages.success(request, f"\"{tmpl.name}\" impostato come default.")
+    return redirect('stores:message_templates')

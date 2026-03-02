@@ -68,6 +68,10 @@
     <a href="#" class="sidebar-link {% block nav_outreach %}{% endblock %}">
       <i class="bi bi-envelope"></i> Outreach
     </a>
+    <div class="nav-section-label" style="margin-top:12px">Configurazione</div>
+    <a href="{% url 'stores:message_templates' %}" class="sidebar-link {% block nav_messages %}{% endblock %}">
+      <i class="bi bi-chat-dots"></i> Messaggi
+    </a>
   </nav>
   <div class="sidebar-footer">
     <small style="color:#6b6b80;font-size:11px;">Step 4 — Analisi store</small>

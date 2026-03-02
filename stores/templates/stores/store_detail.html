@@ -249,12 +249,28 @@
       <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-semibold"><i class="bi bi-chat-dots me-2"></i>Messaggio outreach</h6>
         <div class="d-flex gap-2 align-items-center">
+
+          {% if msg_templates %}
+          <!-- Selettore template -->
+          <select id="template-select"
+                  onchange="loadTemplate(this.value)"
+                  style="font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;color:#374151;background:#fff;cursor:pointer;max-width:160px">
+            <option value="">— scegli template —</option>
+            {% for t in msg_templates %}
+            <option value="{{ t.pk }}" {% if t.is_default %}selected{% endif %}>
+              {% if t.is_default %}★ {% endif %}{{ t.name }}
+            </option>
+            {% endfor %}
+          </select>
+          {% endif %}
+
           {% if store.whatsapp_url %}
           <a href="{{ store.whatsapp_url }}" target="_blank"
              class="btn btn-sm btn-outline-success py-0 px-2">
             <i class="bi bi-whatsapp me-1"></i>WhatsApp
           </a>
           {% endif %}
+
           <button id="btn-copy" onclick="copyMsg()"
                   style="background:none;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;transition:all .15s;"
                   onmouseenter="this.style.background='#f3f4f6'"
@@ -266,16 +282,17 @@
       </div>
       <div class="card-body p-0">
         <textarea id="msg-outreach" class="form-control font-monospace border-0 rounded-0"
-                  rows="8" style="font-size:13px;resize:none;background:#f9fafb;padding:16px 20px;outline:none;box-shadow:none;">Ciao {{ store.name|default:"!" }},
-
-ho visto il vostro store e ho notato che le immagini dei prodotti potrebbero lavorare di più per voi.
-
-Trasformo foto di prodotti esistenti in immagini da catalogo professionale — senza shooting, consegna in 36 ore.
-
-Ho rifatto come esempio una delle vostre immagini per mostrarvi la differenza concreta.
-
-Posso mandarvela?</textarea>
+                  rows="8" style="font-size:13px;resize:none;background:#f9fafb;padding:16px 20px;outline:none;box-shadow:none;"></textarea>
       </div>
+      {% if not msg_templates %}
+      <div class="card-footer bg-white border-top py-2 px-3">
+        <small class="text-muted">
+          <i class="bi bi-info-circle me-1"></i>
+          Nessun template configurato.
+          <a href="{% url 'stores:message_templates' %}" class="text-decoration-none">Crea il primo template →</a>
+        </small>
+      </div>
+      {% endif %}
     </div>
 
     <!-- Log contatti -->
@@ -330,16 +347,34 @@ Posso mandarvela?</textarea>
 
 {% block extra_js %}
 <script>
-function confirmAnalyze(btn) {
-  setTimeout(() => {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi in corso...';
-  }, 10);
-  return true;
+// Dati template dal server (corpo grezzo, senza rendering Django)
+const TEMPLATES = {{ templates_json|safe }};
+
+// Variabili store disponibili per sostituzione lato client
+const STORE_VARS = {
+  '{{ store.name }}':              '{{ store.name|escapejs }}',
+  '{{ store.domain }}':            '{{ store.domain|escapejs }}',
+  '{{ store.get_niche_display }}': '{{ store.get_niche_display|escapejs }}',
+};
+
+function renderTemplate(body) {
+  let text = body;
+  for (const [variable, value] of Object.entries(STORE_VARS)) {
+    text = text.split(variable).join(value || variable);
+  }
+  return text;
+}
+
+function loadTemplate(id) {
+  const textarea = document.getElementById('msg-outreach');
+  if (!id) { textarea.value = ''; return; }
+  const tmpl = TEMPLATES.find(t => t.id == id);
+  if (tmpl) textarea.value = renderTemplate(tmpl.body);
 }
 
 function copyMsg() {
   const txt = document.getElementById('msg-outreach');
+  if (!txt.value.trim()) return;
   navigator.clipboard.writeText(txt.value).then(() => {
     const icon  = document.getElementById('copy-icon');
     const label = document.getElementById('copy-label');
@@ -356,5 +391,23 @@ function copyMsg() {
     }, 2000);
   });
 }
+
+function confirmAnalyze(btn) {
+  setTimeout(() => {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analisi in corso...';
+  }, 10);
+  return true;
+}
+
+// Carica il template default al caricamento pagina
+document.addEventListener('DOMContentLoaded', () => {
+  const defaultTmpl = TEMPLATES.find(t => t.is_default);
+  if (defaultTmpl) {
+    const sel = document.getElementById('template-select');
+    if (sel) sel.value = defaultTmpl.id;
+    loadTemplate(defaultTmpl.id);
+  }
+});
 </script>
 {% endblock %}

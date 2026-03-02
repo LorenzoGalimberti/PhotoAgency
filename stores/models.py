@@ -3,11 +3,6 @@ from django.utils import timezone
 
 
 class Store(models.Model):
-    """
-    Rappresenta uno store Shopify scoperto.
-    È il nodo centrale del CRM.
-    """
-
     class Status(models.TextChoices):
         NEW        = 'new',        'Nuovo'
         ANALYZED   = 'analyzed',   'Analizzato'
@@ -77,11 +72,6 @@ class Store(models.Model):
 
 
 class StoreAnalysis(models.Model):
-    """
-    Risultato dell'analisi completa di uno store.
-    Ogni store può avere più analisi nel tempo (storico).
-    """
-
     store            = models.ForeignKey(Store, on_delete=models.CASCADE,
                                           related_name='analyses', verbose_name='Store')
     lead_score       = models.IntegerField(default=0, verbose_name='Lead Score')
@@ -129,10 +119,6 @@ class StoreAnalysis(models.Model):
 
 
 class ContactLog(models.Model):
-    """
-    Traccia ogni tentativo di contatto verso uno store.
-    """
-
     class ContactType(models.TextChoices):
         EMAIL   = 'email',   'Email'
         MANUAL  = 'manual',  'Manuale (DM/altro)'
@@ -168,12 +154,7 @@ class ContactLog(models.Model):
         return f"{self.get_contact_type_display()} → {self.store} ({self.get_outcome_display()})"
 
 
-# ✅ NUOVO
 class NicheQueryTemplate(models.Model):
-    """
-    Query di ricerca Google associate a una nicchia.
-    Usate per popolare automaticamente il form di ricerca Selenium.
-    """
     niche = models.CharField(
         max_length=50,
         choices=Store.Niche.choices,
@@ -196,3 +177,35 @@ class NicheQueryTemplate(models.Model):
 
     def queries_list(self):
         return [q.strip() for q in self.queries.splitlines() if q.strip()]
+
+
+class MessageTemplate(models.Model):
+    """
+    Template messaggi outreach configurabili dall'utente.
+    Supporta variabili Django template: {{ store.name }}, {{ store.domain }}, ecc.
+    """
+    name       = models.CharField(max_length=100, verbose_name='Nome template',
+                                   help_text='Es: Freddo - Immagini scarse')
+    body       = models.TextField(
+        verbose_name='Testo messaggio',
+        help_text='Variabili disponibili: {{ store.name }}, {{ store.domain }}, {{ store.get_niche_display }}'
+    )
+    is_default = models.BooleanField(default=False, verbose_name='Default',
+                                      help_text='Mostrato automaticamente nella pagina store')
+    is_active  = models.BooleanField(default=True, verbose_name='Attivo')
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'Template Messaggio'
+        verbose_name_plural = 'Template Messaggi'
+        ordering            = ['-is_default', 'name']
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # Se questo viene marcato default, togli default agli altri
+        if self.is_default:
+            MessageTemplate.objects.exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
