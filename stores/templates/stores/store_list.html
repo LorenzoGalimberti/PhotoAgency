@@ -126,14 +126,27 @@
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
     <h6 class="mb-0 fw-semibold">{{ stores.paginator.count }} store trovati</h6>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-start">
+
+      <!-- ── MODIFICATO: form analyze_all con checkbox mobile_only ── -->
       <form method="post" action="{% url 'analyzer:analyze_all' %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-sm btn-success"
-                onclick="return confirm('Analizza tutti gli store con status NEW?\nPotrebbe richiedere diversi minuti.')">
-          <i class="bi bi-play-circle me-1"></i>Analizza tutti ({{ counts.new }} NEW)
-        </button>
+        <div class="d-flex flex-column align-items-end gap-1">
+          <button type="submit" class="btn btn-sm btn-success"
+                  onclick="return confirm('Analizza tutti gli store con status NEW?\nPotrebbe richiedere diversi minuti.')">
+            <i class="bi bi-play-circle me-1"></i>Analizza tutti ({{ counts.new }} NEW)
+          </button>
+          <div class="form-check mb-0" style="font-size:11px">
+            <input class="form-check-input" type="checkbox"
+                   name="mobile_only" id="mobile_only_check">
+            <label class="form-check-label text-muted" for="mobile_only_check">
+              📱 Solo store con cellulare
+            </label>
+          </div>
+        </div>
       </form>
+      <!-- ── FINE MODIFICA ── -->
+
       <a href="{% url 'stores:run_selenium' %}" class="btn btn-sm btn-primary">
         <i class="bi bi-robot me-1"></i>Cerca nuovi
       </a>
@@ -243,9 +256,6 @@
 {% block extra_js %}
 <script>
 // ── Polling job attivo ─────────────────────────────────────
-// Salviamo il job_id attivo in sessionStorage quando viene creato.
-// Il banner legge da sessionStorage e fa polling sull'API.
-
 const banner    = document.getElementById('active-job-banner');
 const banTitle  = document.getElementById('banner-title');
 const banSub    = document.getElementById('banner-sub');
@@ -270,7 +280,6 @@ async function checkJob() {
     const data = await res.json();
 
     if (data.status === 'running') {
-      // Mostra banner
       banner.style.display = 'flex';
       banLink.href = `/analyzer/job/${activeJobId}/`;
 
@@ -288,34 +297,17 @@ async function checkJob() {
       }
 
     } else {
-      // Job completato o errore → ferma polling e nascondi
       stopPolling();
     }
 
   } catch (e) {
-    // Errore di rete — non fare nulla, riprova al prossimo tick
+    // Errore di rete — riprova al prossimo tick
   }
 }
 
-// Avvia polling solo se c'è un job attivo in sessionStorage
 if (activeJobId) {
   checkJob();
   pollTimer = setInterval(checkJob, 3000);
 }
-
-// ── Intercetta i form di analisi per salvare il job_id ─────
-// Quando viene fatto il redirect a /analyzer/job/<id>/,
-// salviamo l'id in sessionStorage così il banner funziona
-// anche tornando sulla store_list.
-//
-// Soluzione: intercettiamo il form submit e leggiamo
-// l'header Location dalla risposta fetch — ma siccome
-// Django fa redirect server-side, usiamo un approccio
-// diverso: salviamo in sessionStorage dal job_status.html
-// (vedi sotto) e qui leggiamo.
-//
-// Il job_status.html salva il job_id con:
-//   sessionStorage.setItem('active_job_id', JOB_ID);
-// Qui sopra lo leggiamo e facciamo polling.
 </script>
 {% endblock %}

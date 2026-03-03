@@ -15,10 +15,12 @@ from stores.models import Store, StoreAnalysis
 from . import job_manager
 
 
-def run_analysis(store: Store, job_id: str = None) -> dict:
+def run_analysis(store: Store, job_id: str = None, mobile_only: bool = False) -> dict:
     """
     Lancia l'analisi su un singolo store.
     Se job_id è fornito, logga in tempo reale nel job_manager.
+    Se mobile_only=True, passa --mobile-only allo script: lo store viene
+    saltato (skipped=True) se non ha un numero di cellulare pubblico.
     Ritorna dict con success, messaggio e StoreAnalysis creata.
     """
 
@@ -46,6 +48,10 @@ def run_analysis(store: Store, job_id: str = None) -> dict:
         '--output', str(output_dir),
     ]
 
+    # ── NUOVO: aggiunge --mobile-only se richiesto ──
+    if mobile_only:
+        cmd.append('--mobile-only')
+
     log(f'Avvio analisi: {store.url}')
 
     try:
@@ -64,7 +70,6 @@ def run_analysis(store: Store, job_id: str = None) -> dict:
             if line.startswith('RESULT_JSON:'):
                 result_data = json.loads(line[len('RESULT_JSON:'):])
             elif line.startswith('[analyzer]'):
-                # Log live dallo script
                 msg = line.replace('[analyzer]', '').strip()
                 level = 'error' if 'errore' in msg.lower() or 'error' in msg.lower() else 'info'
                 log(msg, level)
@@ -73,6 +78,11 @@ def run_analysis(store: Store, job_id: str = None) -> dict:
             err = proc.stderr[-400:] if proc.stderr else 'Nessun output JSON trovato'
             log(f'Analisi fallita: {err}', 'error')
             return {'success': False, 'error': err}
+
+        # ── NUOVO: gestisce il caso skipped (nessun cellulare trovato) ──
+        if result_data.get('skipped'):
+            log(f"⏭️  Saltato (nessun cellulare): {store.url}", 'info')
+            return {'success': False, 'skipped': True, 'error': result_data.get('error', '')}
 
         if not result_data.get('success'):
             err = result_data.get('error', 'Errore sconosciuto')
@@ -146,23 +156,35 @@ def run_analysis(store: Store, job_id: str = None) -> dict:
         return {'success': False, 'error': err}
 
 
-def run_bulk_analysis_thread(stores_qs, job_id: str):
+def run_bulk_analysis_thread(stores_qs, job_id: str, mobile_only: bool = False):
     """
     Esegue l'analisi bulk in un thread separato.
     Aggiorna job_manager ad ogni store completato.
+    Se mobile_only=True, salta gli store senza cellulare.
     """
     stores = list(stores_qs)
 
-    job_manager.add_log(job_id, f'Avvio analisi bulk: {len(stores)} store da processare', 'info')
+    mode_label = ' [📱 solo cellulare]' if mobile_only else ''
+    job_manager.add_log(job_id, f'Avvio analisi bulk{mode_label}: {len(stores)} store da processare', 'info')
 
     for store in stores:
         name = store.name or store.domain or store.url
         job_manager.set_current(job_id, store.url, name)
         job_manager.add_log(job_id, f'→ {name} ({store.url})', 'info')
 
-        result = run_analysis(store, job_id=job_id)
+        # ── NUOVO: passa mobile_only ──
+        result = run_analysis(store, job_id=job_id, mobile_only=mobile_only)
 
-        if result['success']:
+        if result.get('skipped'):
+            # Store saltato per mancanza cellulare — non è un errore, non conta
+            job_manager.mark_store_done(
+                job_id,
+                url=store.url,
+                name=name,
+                success=False,
+                error='⏭️ Saltato (nessun cellulare)',
+            )
+        elif result['success']:
             analysis = result['analysis']
             job_manager.mark_store_done(
                 job_id,
@@ -189,6 +211,7 @@ def run_bulk_analysis_thread(stores_qs, job_id: str):
 def run_single_analysis_thread(store: Store, job_id: str):
     """
     Esegue l'analisi di un singolo store in un thread separato.
+    (Il singolo store non usa mobile_only — il filtro è solo per il bulk.)
     """
     name = store.name or store.domain or store.url
     job_manager.set_current(job_id, store.url, name)
@@ -216,4 +239,3 @@ def run_single_analysis_thread(store: Store, job_id: str):
             error=result['error'],
         )
         job_manager.fail_job(job_id, result['error'])
-        

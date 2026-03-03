@@ -41,8 +41,8 @@ IMG_WORKERS      = 6
 IMG_TIMEOUT      = 8
 IMG_DOWNLOAD_PX  = 400
 MAX_PER_PRODUCT  = 4
-MAX_PRODUCT_IMGS = 100  # limite immagini prodotto
-MAX_EXTRA_IMGS   = 50   # limite immagini pagine extra (separato)
+MAX_PRODUCT_IMGS = 100
+MAX_EXTRA_IMGS   = 50
 
 _print_lock = threading.Lock()
 
@@ -263,6 +263,85 @@ def extract_contacts(page_url):
 
 
 # ============================================================================
+# FILTRO CELLULARE  ← NUOVO
+# ============================================================================
+
+# Prefissi mobili per paese (i più comuni)
+# Italia:         3xx (10 cifre totali)
+# UK:             07xxx o +44 7xxx (10-11 cifre)
+# Francia:        06xxx / 07xxx (10 cifre)
+# Germania:       015x / 016x / 017x (11 cifre)
+# Spagna:         6xx / 7xx (9 cifre)
+# USA/Canada:     qualsiasi 10 cifre (difficile distinguere da fisso senza DB)
+
+MOBILE_PATTERNS = [
+    # Italia — 3xx con 10 cifre totali (es. 333 123 4567)
+    r'(?<!\d)(\+39[\s\-\.]?)?3\d{2}[\s\-\.]?\d{3}[\s\-\.]?\d{4}(?!\d)',
+    # UK — 07xxx o +44 7xxx
+    r'(?<!\d)(\+44[\s\-\.]?)?07\d{3}[\s\-\.]?\d{6}(?!\d)',
+    # Francia — 06 / 07
+    r'(?<!\d)(\+33[\s\-\.]?)?0[67]\d{2}[\s\-\.]?\d{2}[\s\-\.]?\d{2}[\s\-\.]?\d{2}(?!\d)',
+    # Germania — 015x / 016x / 017x
+    r'(?<!\d)(\+49[\s\-\.]?)?01[567]\d[\s\-\.]?\d{3}[\s\-\.]?\d{4,6}(?!\d)',
+    # Spagna — 6xx / 7xx (9 cifre)
+    r'(?<!\d)(\+34[\s\-\.]?)?[67]\d{2}[\s\-\.]?\d{3}[\s\-\.]?\d{3}(?!\d)',
+]
+
+def is_mobile_phone(phone_str: str) -> bool:
+    """
+    Restituisce True se il numero corrisponde a un pattern di cellulare
+    italiano o internazionale (UK, FR, DE, ES).
+    Lavora sul numero grezzo così come estratto dalla pagina.
+    """
+    if not phone_str:
+        return False
+    for pattern in MOBILE_PATTERNS:
+        if re.search(pattern, phone_str, re.IGNORECASE):
+            return True
+    return False
+
+
+def extract_mobile_phone(html: str) -> str | None:
+    """
+    Scansiona l'HTML grezzo e restituisce il PRIMO numero di cellulare trovato,
+    oppure None se non ne trova nessuno.
+    Usato come check rapido PRIMA dell'analisi completa.
+    """
+    for pattern in MOBILE_PATTERNS:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            return re.sub(r'\s+', ' ', m.group(0)).strip()
+    return None
+
+
+def quick_mobile_check(base_url: str) -> str | None:
+    """
+    Controlla velocemente se lo store ha un numero di cellulare pubblico.
+    Controlla homepage + pagina contatti (se trovata) senza fare l'analisi completa.
+    Restituisce il numero trovato oppure None.
+    """
+    pages_to_check = [base_url]
+
+    # Prova a trovare la pagina contatti senza scaricare tutto
+    for candidate in CONTACT_CANDIDATES:
+        pages_to_check.append(base_url.rstrip('/') + candidate)
+
+    for url in pages_to_check:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+            if r.status_code != 200:
+                continue
+            mobile = extract_mobile_phone(r.text)
+            if mobile:
+                log(f"  📱 Cellulare trovato in {url}: {mobile}")
+                return mobile
+        except Exception:
+            continue
+
+    return None
+
+
+# ============================================================================
 # MODULO IMMAGINI
 # ============================================================================
 
@@ -410,11 +489,6 @@ def collect_page_img_urls(url, label):
 
 
 def collect_all_img_urls(base_url, products):
-    """
-    Raccoglie immagini con limiti SEPARATI:
-    - Prodotti: MAX_PRODUCT_IMGS
-    - Pagine extra: MAX_EXTRA_IMGS (indipendente dai prodotti)
-    """
     all_imgs, seen = [], set()
 
     def add(items, limit=None):
@@ -430,12 +504,10 @@ def collect_all_img_urls(base_url, products):
                 count += 1
         return count
 
-    # Prodotti — limite indipendente
     log("Raccolta immagini prodotto...")
     prod_added = add(collect_product_img_urls(products), limit=MAX_PRODUCT_IMGS)
     log(f"  → {prod_added} immagini prodotto")
 
-    # Pagine extra — limite SEPARATO e indipendente
     extra_pages = [
         (base_url,                             'Homepage'),
         (f"{base_url}/collections",            'Collections'),
@@ -549,6 +621,17 @@ def calculate_lead_score(contacts, products_info, img_quality, social):
     else:
         breakdown['Email'] = {'score': 0, 'max': 20, 'reason': 'Non trovata'}
 
+    # ── Telefono: distingue cellulare da fisso ── NUOVO
+    phone = contacts.get('phone', '') or ''
+    if is_mobile_phone(phone):
+        score += 15
+        breakdown['Telefono'] = {'score': 15, 'max': 15, 'reason': f"📱 Cellulare: {phone}"}
+    elif phone:
+        score += 5
+        breakdown['Telefono'] = {'score': 5, 'max': 15, 'reason': f"☎️ Fisso: {phone}"}
+    else:
+        breakdown['Telefono'] = {'score': 0, 'max': 15, 'reason': 'Non trovato'}
+
     n = products_info.get('total_count', 0)
     ps = 15 if n >= 50 else 10 if n >= 20 else 5 if n >= 10 else 0
     score += ps
@@ -580,7 +663,7 @@ def calculate_lead_score(contacts, products_info, img_quality, social):
 
 
 # ============================================================================
-# REPORT HTML
+# REPORT HTML  (invariato)
 # ============================================================================
 
 def _bar(score):
@@ -660,7 +743,6 @@ def generate_html_report(store_url, store_name, basic_info, contacts,
     analyzed = [r for r in img_results if r and not r.get('error')]
     errors   = [r for r in img_results if r and r.get('error')]
 
-    # Separa prodotti da extra
     prod_imgs  = [r for r in analyzed if not r.get('is_extra')]
     extra_imgs = [r for r in analyzed if r.get('is_extra')]
 
@@ -672,7 +754,6 @@ def generate_html_report(store_url, store_name, basic_info, contacts,
     _, avg_extra_color, _ = score_to_grade(avg_extra)
     _, avg_all_color,   _ = score_to_grade(avg_all)
 
-    # Raggruppa per source
     by_source_prod  = {}
     by_source_extra = {}
     for r in prod_imgs:
@@ -693,19 +774,16 @@ def generate_html_report(store_url, store_name, basic_info, contacts,
     ls_color  = '#22c55e' if ls >= 70 else '#f59e0b' if ls >= 50 else '#6366f1'
     priority_emoji = '🔥' if ls >= 70 else '🌟' if ls >= 50 else '❄️'
 
-    # Sezioni HTML immagini prodotto
     prod_sections_html = ''.join(
         _build_img_section(src, imgs)
         for src, imgs in by_source_prod.items()
     ) or '<p style="color:#6b6b80">Nessuna immagine prodotto analizzata.</p>'
 
-    # Sezioni HTML immagini extra
     extra_sections_html = ''.join(
         _build_img_section(src, imgs)
         for src, imgs in by_source_extra.items()
     ) or '<p style="color:#6b6b80">Nessuna immagine extra trovata.</p>'
 
-    # Lead score breakdown
     breakdown_html = ''
     for crit, sc in lead_score['breakdown'].items():
         pct = sc['score'] / sc['max'] * 100 if sc.get('max') else 0
@@ -736,6 +814,12 @@ def generate_html_report(store_url, store_name, basic_info, contacts,
         f'<li class="issue-li">{i}</li>'
         for i in img_quality_fast.get('issues', [])
     )
+
+    # Badge cellulare nell'header del report
+    mobile_badge = ''
+    phone = contacts.get('phone', '')
+    if phone and is_mobile_phone(phone):
+        mobile_badge = f'<span style="background:#22c55e20;border:1px solid #22c55e40;color:#22c55e;padding:4px 12px;border-radius:20px;font-size:12px;margin-left:12px;">📱 {phone}</span>'
 
     return f'''<!DOCTYPE html>
 <html lang="it">
@@ -838,7 +922,7 @@ a{{color:var(--accent2);text-decoration:none;}}
   <div class="h-inner">
     <div class="h-label">🔍 Shopify Analyzer — Report Completo</div>
     <div class="h-title">Report — <span>{store_name}</span></div>
-    <div class="h-url">{store_url}</div>
+    <div class="h-url">{store_url} {mobile_badge}</div>
     <div class="h-meta">Generato il {timestamp} · {products_info.get('total_count',0)} prodotti · {len(prod_imgs)} img prodotto + {len(extra_imgs)} img extra analizzate</div>
     <div class="lead-hero">
       <div class="lead-circle">
@@ -892,7 +976,7 @@ a{{color:var(--accent2);text-decoration:none;}}
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Estratto da: <a href="{contact_page}" target="_blank">{contact_page}</a></div>
     <div class="contact-block">
       <div class="contact-item"><div class="cl">Email</div><div class="cv">{contacts.get('email') or '—'}</div></div>
-      <div class="contact-item"><div class="cl">Telefono</div><div class="cv">{contacts.get('phone') or '—'}</div></div>
+      <div class="contact-item"><div class="cl">Telefono</div><div class="cv">{contacts.get('phone') or '—'} {'📱' if is_mobile_phone(contacts.get('phone','')) else '☎️' if contacts.get('phone') else ''}</div></div>
       <div class="contact-item"><div class="cl">WhatsApp</div><div class="cv">{contacts.get('whatsapp') or '—'}</div></div>
       <div class="contact-item"><div class="cl">P.IVA</div><div class="cv">{contacts.get('piva') or '—'}</div></div>
       <div class="contact-item"><div class="cl">Codice Fiscale</div><div class="cv">{contacts.get('cf') or '—'}</div></div>
@@ -975,8 +1059,10 @@ function showTab(name, btn) {{
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--url',    default=None)
-    parser.add_argument('--output', default=None)
+    parser.add_argument('--url',         default=None)
+    parser.add_argument('--output',      default=None)
+    parser.add_argument('--mobile-only', action='store_true',
+                        help='Salta l\'analisi completa se lo store non ha un numero di cellulare pubblico')
     args = parser.parse_args()
 
     store_url = args.url
@@ -1009,6 +1095,25 @@ def main():
 
     products = shopify['products']
     log(f"OK — {len(products)} prodotti")
+
+    # ── FILTRO CELLULARE ── NUOVO
+    # Se --mobile-only è attivo, controlla il cellulare PRIMA di fare tutto il resto.
+    # È un check leggero: scarica solo homepage + pagina contatti.
+    if args.mobile_only:
+        log("🔍 Controllo cellulare (mobile-only attivo)...")
+        mobile_number = quick_mobile_check(base_url)
+        if not mobile_number:
+            log("⏭️  Nessun cellulare trovato — store saltato.")
+            result = {
+                'success':      False,
+                'skipped':      True,
+                'error':        'Nessun numero di cellulare trovato (--mobile-only)',
+                'store_url':    store_url,
+                'store_name':   store_name,
+            }
+            print(f"RESULT_JSON:{json.dumps(result)}")
+            sys.exit(0)
+        log(f"✅ Cellulare trovato: {mobile_number} — procedo con analisi completa")
 
     log("Info store...")
     basic_info = extract_basic_info(base_url)
@@ -1077,6 +1182,7 @@ def main():
         'has_fb_pixel':      basic_info.get('has_facebook_pixel', False),
         'email':        contacts.get('email') or '',
         'phone':        contacts.get('phone') or '',
+        'is_mobile':    is_mobile_phone(contacts.get('phone', '') or ''),  # ← NUOVO
         'whatsapp_url': contacts.get('whatsapp') or '',
         'piva':         contacts.get('piva') or '',
         'address':      contacts.get('address') or '',
@@ -1091,3 +1197,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

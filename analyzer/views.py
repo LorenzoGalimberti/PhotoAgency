@@ -58,11 +58,14 @@ def analyze_all(request):
         messages.info(request, "Nessuno store da analizzare.")
         return redirect('stores:store_list')
 
+    # ── NUOVO: legge il checkbox dal form ──
+    mobile_only = request.POST.get('mobile_only') == 'on'
+
     job_id = job_manager.create_job(job_type='bulk', total=total)
 
     t = threading.Thread(
         target=run_bulk_analysis_thread,
-        args=(stores_qs, job_id),
+        args=(stores_qs, job_id, mobile_only),  # ← passa mobile_only
         daemon=True,
     )
     t.start()
@@ -116,7 +119,7 @@ def job_status_api(request, job_id):
         'errors':       job['errors'],
         'current_url':  job['current_url'],
         'current_name': job['current_name'],
-        'logs':         job['logs'][-50:],   # ultimi 50 log
+        'logs':         job['logs'][-50:],
         'results':      job['results'],
         'redirect_url': redirect_url,
         'finished_at':  job['finished_at'],
