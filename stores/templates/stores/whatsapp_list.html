@@ -1,0 +1,533 @@
+{% extends 'base.html' %}
+{% block title %}WhatsApp — Shopify CRM{% endblock %}
+{% block nav_whatsapp %}active{% endblock %}
+{% block page_title %}📱 WhatsApp{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Stats bar ── */
+  .wa-stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .wa-stat {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 16px 24px; min-width: 140px; text-align: center; flex: 1;
+  }
+  .wa-stat-num { font-size: 28px; font-weight: 800; line-height: 1; }
+  .wa-stat-lbl { font-size: 11px; color: #6b7280; margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ── Live banner ── */
+  #wa-live-banner {
+    display: none;
+    background: linear-gradient(90deg, #064e3b, #065f46);
+    border: 1px solid #059669;
+    border-radius: 10px; padding: 14px 20px; margin-bottom: 20px;
+    align-items: center; gap: 16px;
+  }
+  #wa-live-banner .pulse {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #34d399; flex-shrink: 0;
+    animation: wapulse 1.5s infinite;
+  }
+  @keyframes wapulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: .4; transform: scale(.7); }
+  }
+  .ban-text { flex: 1; color: #ecfdf5; font-size: 13px; font-weight: 600; }
+  .ban-sub  { color: #6ee7b7; font-size: 11px; margin-top: 2px; }
+
+  /* ── Progress bulk ── */
+  #wa-bulk-bar { display: none; margin-bottom: 20px; }
+  .wa-progress-wrap {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .wa-progress-track {
+    background: #f3f4f6; border-radius: 99px; height: 10px;
+    margin: 10px 0; overflow: hidden;
+  }
+  .wa-progress-fill {
+    background: linear-gradient(90deg, #25d366, #059669);
+    height: 100%; border-radius: 99px; width: 0%;
+    transition: width .4s ease;
+  }
+  .wa-progress-meta {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: #6b7280;
+  }
+
+  /* ── Tabs ── */
+  .wa-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .wa-tab {
+    padding: 8px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 2px solid #e5e7eb;
+    background: #fff; color: #6b7280; transition: all .15s;
+  }
+  .wa-tab:hover { border-color: #d1d5db; color: #374151; }
+  .wa-tab.tab-found.active  { background: #25d366; border-color: #25d366; color: #fff; }
+  .wa-tab.tab-nf.active     { background: #ef4444; border-color: #ef4444; color: #fff; }
+  .wa-tab.tab-pend.active   { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+
+  .wa-panel { display: none; }
+  .wa-panel.active { display: block; }
+
+  /* ── Bottone analizza ── */
+  .btn-wa-analyze {
+    font-size: 11px; padding: 4px 12px; border-radius: 6px;
+    border: 1px solid #7c3aed; color: #7c3aed; background: transparent;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .btn-wa-analyze:hover:not(:disabled) { background: #7c3aed; color: #fff; }
+  .btn-wa-analyze:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ── Badge stato ── */
+  .wa-badge {
+    display: inline-block; padding: 3px 10px;
+    border-radius: 10px; font-size: 11px; font-weight: 600;
+  }
+  .wa-badge-found    { background: #dcfce7; color: #15803d; }
+  .wa-badge-notfound { background: #fee2e2; color: #b91c1c; }
+  .wa-badge-pending  { background: #ede9fe; color: #7c3aed; }
+  .wa-badge-loading  { background: #fef3c7; color: #92400e; }
+  .wa-badge-error    { background: #fee2e2; color: #b91c1c; }
+
+  /* ── Link WA ── */
+  .wa-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #25d366; color: #fff; text-decoration: none;
+    padding: 5px 14px; border-radius: 8px; font-size: 12px;
+    font-weight: 600; transition: background .15s;
+  }
+  .wa-link:hover { background: #1da851; color: #fff; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    padding: 48px 24px; text-align: center; color: #9ca3af;
+  }
+  .empty-state i { font-size: 48px; opacity: .2; display: block; margin-bottom: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Live banner ── -->
+<div id="wa-live-banner">
+  <div class="pulse"></div>
+  <div>
+    <div class="ban-text" id="wa-ban-text">Analisi WhatsApp in corso...</div>
+    <div class="ban-sub"  id="wa-ban-sub">—</div>
+  </div>
+</div>
+
+<!-- ── Progress bar bulk ── -->
+<div id="wa-bulk-bar">
+  <div class="wa-progress-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <span style="font-size:13px;font-weight:600">
+        <i class="bi bi-whatsapp text-success me-1"></i>Analisi bulk in corso
+      </span>
+      <span id="wa-bulk-pct" style="font-size:14px;font-weight:800;color:#25d366">0%</span>
+    </div>
+    <div class="wa-progress-track">
+      <div class="wa-progress-fill" id="wa-bulk-fill"></div>
+    </div>
+    <div class="wa-progress-meta">
+      <span id="wa-bulk-cnt">0 / 0</span>
+      <span id="wa-bulk-current" class="text-truncate" style="max-width:60%">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stats ── -->
+<div class="wa-stats">
+  <div class="wa-stat">
+    <div class="wa-stat-num" style="color:#25d366">{{ total_found }}</div>
+    <div class="wa-stat-lbl">✅ Trovati</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-num" style="color:#ef4444">{{ total_not_found }}</div>
+    <div class="wa-stat-lbl">❌ Non trovati</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-num" style="color:#7c3aed">{{ total_pending }}</div>
+    <div class="wa-stat-lbl">⏳ Pending</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-num">{{ total_found|add:total_not_found }}</div>
+    <div class="wa-stat-lbl">Totale analizzati</div>
+  </div>
+</div>
+
+<!-- ── Bottone analizza tutti ── -->
+{% if total_pending > 0 %}
+<div class="d-flex gap-3 align-items-center mb-4">
+  <button class="btn btn-success btn-sm" id="btn-analyze-all-wa"
+          onclick="analyzeAllPending()">
+    <i class="bi bi-whatsapp me-1"></i>
+    Analizza tutti i pending ({{ total_pending }})
+  </button>
+  <small class="text-muted">Tempo stimato: ~{{ total_pending }} store × ~20s</small>
+</div>
+{% endif %}
+
+<!-- ── Tabs ── -->
+<div class="wa-tabs">
+  <button class="wa-tab tab-found active" onclick="showTab('found', this)">
+    ✅ Trovati
+    <span class="badge bg-success bg-opacity-75 ms-1">{{ total_found }}</span>
+  </button>
+  <button class="wa-tab tab-nf" onclick="showTab('notfound', this)">
+    ❌ Non trovati
+    <span class="badge bg-danger bg-opacity-75 ms-1">{{ total_not_found }}</span>
+  </button>
+  <button class="wa-tab tab-pend" onclick="showTab('pending', this)">
+    ⏳ Pending
+    <span class="badge ms-1" style="background:#7c3aed">{{ total_pending }}</span>
+  </button>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB: TROVATI
+════════════════════════════════════════════ -->
+<div class="wa-panel active" id="panel-found">
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-whatsapp text-success me-1"></i>Store con widget WhatsApp
+      </h6>
+      <small class="text-muted">{{ total_found }} store</small>
+    </div>
+    {% if found %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Store</th>
+            <th>Nicchia</th>
+            <th>Numero</th>
+            <th>Contatto diretto</th>
+            <th>Analizzato il</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for store in found %}
+          <tr id="row-{{ store.pk }}">
+            <td class="ps-3">
+              <div class="fw-semibold" style="font-size:13px">{{ store.name|default:store.domain }}</div>
+              <small>
+                <a href="{{ store.url }}" target="_blank" class="text-muted text-decoration-none">
+                  {{ store.url }} <i class="bi bi-box-arrow-up-right ms-1" style="font-size:10px"></i>
+                </a>
+              </small>
+            </td>
+            <td><small class="text-muted">{{ store.get_niche_display }}</small></td>
+            <td>
+              <code style="font-size:12px;color:#15803d">
+                +{{ store.whatsapp_url|cut:"https://wa.me/" }}
+              </code>
+            </td>
+            <td>
+              <a href="{{ store.whatsapp_url }}" target="_blank" class="wa-link">
+                <i class="bi bi-whatsapp"></i> Apri chat
+              </a>
+            </td>
+            <td>
+              <small class="text-muted">{{ store.whatsapp_analyzed_at|date:"d/m/Y H:i" }}</small>
+            </td>
+            <td class="text-end pe-3">
+              <a href="{% url 'stores:store_detail' store.pk %}"
+                 class="btn btn-sm btn-outline-secondary py-0">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-whatsapp"></i>
+      <p class="mb-0">Nessun numero trovato ancora.</p>
+      <small>Avvia l'analisi dalla tab Pending.</small>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB: NON TROVATI
+════════════════════════════════════════════ -->
+<div class="wa-panel" id="panel-notfound">
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-x-circle text-danger me-1"></i>Store senza widget WhatsApp
+      </h6>
+      <small class="text-muted">{{ total_not_found }} store</small>
+    </div>
+    {% if not_found %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Store</th>
+            <th>Nicchia</th>
+            <th>Analizzato il</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for store in not_found %}
+          <tr id="row-{{ store.pk }}">
+            <td class="ps-3">
+              <div class="fw-semibold" style="font-size:13px">{{ store.name|default:store.domain }}</div>
+              <small>
+                <a href="{{ store.url }}" target="_blank" class="text-muted text-decoration-none">
+                  {{ store.url }} <i class="bi bi-box-arrow-up-right ms-1" style="font-size:10px"></i>
+                </a>
+              </small>
+            </td>
+            <td><small class="text-muted">{{ store.get_niche_display }}</small></td>
+            <td>
+              <small class="text-muted">{{ store.whatsapp_analyzed_at|date:"d/m/Y H:i" }}</small>
+            </td>
+            <td>
+              <span class="wa-badge wa-badge-notfound" id="badge-{{ store.pk }}">❌ Non trovato</span>
+            </td>
+            <td class="text-end pe-3">
+              <div class="d-flex gap-2 justify-content-end">
+                <button class="btn-wa-analyze"
+                        id="btn-{{ store.pk }}"
+                        onclick="analyzeStore({{ store.pk }}, this, true)"
+                        title="Ri-analizza">
+                  <i class="bi bi-arrow-clockwise"></i> Riprova
+                </button>
+                <a href="{% url 'stores:store_detail' store.pk %}"
+                   class="btn btn-sm btn-outline-secondary py-0">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-emoji-smile"></i>
+      <p class="mb-0">Nessuno store in questa categoria.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB: PENDING
+════════════════════════════════════════════ -->
+<div class="wa-panel" id="panel-pending">
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-clock text-warning me-1"></i>Store non ancora analizzati
+      </h6>
+      <small class="text-muted">{{ total_pending }} store</small>
+    </div>
+    {% if pending %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Store</th>
+            <th>Nicchia</th>
+            <th>Aggiunto il</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pending-tbody">
+          {% for store in pending %}
+          <tr id="row-{{ store.pk }}">
+            <td class="ps-3">
+              <div class="fw-semibold" style="font-size:13px">{{ store.name|default:store.domain }}</div>
+              <small>
+                <a href="{{ store.url }}" target="_blank" class="text-muted text-decoration-none">
+                  {{ store.url }} <i class="bi bi-box-arrow-up-right ms-1" style="font-size:10px"></i>
+                </a>
+              </small>
+            </td>
+            <td><small class="text-muted">{{ store.get_niche_display }}</small></td>
+            <td>
+              <small class="text-muted">{{ store.discovered_at|date:"d/m/Y" }}</small>
+            </td>
+            <td>
+              <span class="wa-badge wa-badge-pending" id="badge-{{ store.pk }}">⏳ Da analizzare</span>
+            </td>
+            <td class="text-end pe-3">
+              <div class="d-flex gap-2 justify-content-end">
+                <button class="btn-wa-analyze"
+                        id="btn-{{ store.pk }}"
+                        onclick="analyzeStore({{ store.pk }}, this)">
+                  <i class="bi bi-search"></i> Analizza
+                </button>
+                <a href="{% url 'stores:store_detail' store.pk %}"
+                   class="btn btn-sm btn-outline-secondary py-0">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-check-circle"></i>
+      <p class="mb-0">Tutti gli store sono stati analizzati!</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+
+// ══════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════════════
+function showTab(name, el) {
+  document.querySelectorAll('.wa-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.wa-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════════
+// ANALISI SINGOLO STORE
+// ══════════════════════════════════════════════════════════
+let bulkRunning = false;
+
+async function analyzeStore(pk, btn, force = false) {
+  const badge  = document.getElementById('badge-' + pk);
+  const nameEl = document.querySelector(`#row-${pk} td:first-child .fw-semibold`);
+  const name   = nameEl ? nameEl.textContent.trim() : 'Store ' + pk;
+
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Analisi...';
+  if (badge) { badge.className = 'wa-badge wa-badge-loading'; badge.textContent = '⏳ In corso...'; }
+
+  const banner = document.getElementById('wa-live-banner');
+  banner.style.display = 'flex';
+  document.getElementById('wa-ban-text').textContent = `Analisi: ${name}`;
+  document.getElementById('wa-ban-sub').textContent  = 'Playwright in esecuzione...';
+
+  try {
+    const url  = `/stores/${pk}/whatsapp-analyze/` + (force ? '?force=1' : '');
+    const res  = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } });
+    const data = await res.json();
+
+    if (!bulkRunning) banner.style.display = 'none';
+
+    if (data.status === 'found') {
+      if (badge) { badge.className = 'wa-badge wa-badge-found'; badge.textContent = '✅ ' + data.number; }
+      btn.innerHTML = '<i class="bi bi-check-circle"></i> Trovato';
+      btn.style.cssText = 'border-color:#25d366;color:#15803d;';
+      // Aggiunge link WA inline
+      const td = badge ? badge.parentElement : null;
+      if (td && !td.querySelector('.wa-link')) {
+        const link = document.createElement('a');
+        link.href = data.whatsapp_url; link.target = '_blank';
+        link.className = 'wa-link ms-2';
+        link.innerHTML = '<i class="bi bi-whatsapp"></i> Apri';
+        td.appendChild(link);
+      }
+    } else if (data.status === 'not_found') {
+      if (badge) { badge.className = 'wa-badge wa-badge-notfound'; badge.textContent = '❌ Non trovato'; }
+      btn.innerHTML = '<i class="bi bi-x-circle"></i> Non trovato';
+      btn.style.cssText = 'border-color:#ef4444;color:#b91c1c;';
+    } else if (data.status === 'skipped') {
+      if (badge) { badge.className = 'wa-badge wa-badge-found'; badge.textContent = '✓ Già analizzato'; }
+      btn.innerHTML = '✓ Skip';
+    } else {
+      if (badge) { badge.className = 'wa-badge wa-badge-error'; badge.textContent = '⚠️ Errore'; }
+      btn.disabled  = false;
+      btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Riprova';
+      console.warn('WA error:', data.message);
+    }
+  } catch (e) {
+    if (!bulkRunning) banner.style.display = 'none';
+    if (badge) { badge.className = 'wa-badge wa-badge-error'; badge.textContent = '⚠️ Errore rete'; }
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Riprova';
+    console.error(e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ANALISI BULK — tutti i pending
+// ══════════════════════════════════════════════════════════
+let bulkTotal = 0;
+let bulkDone  = 0;
+
+async function analyzeAllPending() {
+  if (bulkRunning) return;
+
+  const buttons = [...document.querySelectorAll('#pending-tbody .btn-wa-analyze:not(:disabled)')];
+  if (!buttons.length) { alert('Nessun pending da analizzare.'); return; }
+
+  bulkRunning = true;
+  bulkTotal   = buttons.length;
+  bulkDone    = 0;
+
+  const bulkBar = document.getElementById('wa-bulk-bar');
+  const btnAll  = document.getElementById('btn-analyze-all-wa');
+  bulkBar.style.display = 'block';
+  if (btnAll) { btnAll.disabled = true; btnAll.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>In corso...'; }
+
+  // Switcha sulla tab pending per vedere il progresso live
+  document.querySelectorAll('.wa-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.wa-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.wa-tab.tab-pend').classList.add('active');
+  document.getElementById('panel-pending').classList.add('active');
+
+  function updateProgress(currentName) {
+    const pct = Math.round((bulkDone / bulkTotal) * 100);
+    document.getElementById('wa-bulk-fill').style.width    = pct + '%';
+    document.getElementById('wa-bulk-pct').textContent     = pct + '%';
+    document.getElementById('wa-bulk-cnt').textContent     = bulkDone + ' / ' + bulkTotal;
+    document.getElementById('wa-bulk-current').textContent = currentName || '—';
+  }
+
+  for (const btn of buttons) {
+    const pk     = btn.id.replace('btn-', '');
+    const nameEl = document.querySelector(`#row-${pk} td:first-child .fw-semibold`);
+    const name   = nameEl ? nameEl.textContent.trim() : 'Store ' + pk;
+
+    updateProgress('⟳ ' + name);
+    document.getElementById('wa-ban-text').textContent = `Analisi: ${name}`;
+    document.getElementById('wa-ban-sub').textContent  = `${bulkDone + 1} di ${bulkTotal}`;
+
+    await analyzeStore(parseInt(pk), btn);
+    bulkDone++;
+    updateProgress('✓ ' + name);
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  // Completato
+  bulkRunning = false;
+  document.getElementById('wa-live-banner').style.display = 'none';
+  document.getElementById('wa-bulk-fill').style.width     = '100%';
+  document.getElementById('wa-bulk-pct').textContent      = '100%';
+  document.getElementById('wa-bulk-current').textContent  = '✅ Completato!';
+  if (btnAll) btnAll.innerHTML = '<i class="bi bi-check-circle me-1"></i>Completato';
+
+  setTimeout(() => location.reload(), 2000);
+}
+</script>
+{% endblock %}

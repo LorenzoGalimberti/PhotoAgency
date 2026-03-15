@@ -3,6 +3,12 @@ stores/services.py
 
 Logica di import store da file .txt o .py generato dallo script Selenium.
 Deduplicazione automatica per URL.
+
+Formati URL supportati:
+  1. https://store.myshopify.com     (myshopify diretto)
+  2. https://mionegozio.it           (dominio .it root)
+  3. https://www.mionegozio.it       (con www)
+  4. https://shop.mionegozio.it      (sottodominio)
 """
 
 import re
@@ -12,23 +18,46 @@ from .models import Store
 
 def parse_urls_from_text(content: str) -> list[str]:
     """
-    Estrae tutti gli URL myshopify.com o store generici da un testo.
+    Estrae tutti gli URL store da un testo.
+    Accetta myshopify.com, domini .it, sottodomini .it.
     Funziona sia con file .txt (uno per riga) che con file .py (SEED_STORES = [...]).
     """
-    # Cerca tutti gli URL che contengono myshopify.com o sono URL generici di store
-    pattern = r'https?://[a-zA-Z0-9\-]+\.myshopify\.com[^\s\'"]*'
+    # Pattern che cattura myshopify.com E tutti i domini .it
+    pattern = r'https?://[a-zA-Z0-9\-\.]+(?:\.myshopify\.com|\.it)(?:/[^\s\'"]*)?'
     found = re.findall(pattern, content)
 
-    # Pulizia: rimuove slash finali, parametri query, path extra
+    # Domini da escludere — non sono store
+    BLACKLIST = {
+        'www.google.it', 'google.it', 'support.google.it',
+        'maps.google.it', 'translate.google.it',
+        'web.archive.it', 'archive.it',
+        'wikipedia.it', 'www.wikipedia.it',
+        'facebook.it', 'instagram.it', 'twitter.it',
+        'youtube.it', 'linkedin.it',
+    }
+
+    # Sottodomini Shopify interni da escludere
+    SKIP_SHOPIFY = {'apps', 'help', 'community', 'www', 'checkout', 'partners', 'accounts'}
+
     cleaned = []
     seen = set()
+
     for url in found:
-        # Tieni solo schema + netloc (es. https://store.myshopify.com)
         parsed = urlparse(url)
-        base = f"{parsed.scheme}://{parsed.netloc}"
-        if base not in seen:
-            seen.add(base)
-            cleaned.append(base)
+        base = f"{parsed.scheme}://{parsed.netloc.lower()}"
+
+        # Salta duplicati e blacklist
+        if base in seen or parsed.netloc.lower() in BLACKLIST:
+            continue
+
+        # Salta sottodomini interni di Shopify
+        if '.myshopify.com' in base:
+            subdomain = parsed.netloc.split('.')[0].lower()
+            if subdomain in SKIP_SHOPIFY:
+                continue
+
+        seen.add(base)
+        cleaned.append(base)
 
     return cleaned
 
@@ -49,12 +78,26 @@ def extract_domain(url: str) -> str:
 
 def extract_name_from_url(url: str) -> str:
     """
-    Genera un nome leggibile dal subdomain myshopify.
-    es. https://my-store-name.myshopify.com → My Store Name
+    Genera un nome leggibile dall'URL.
+
+    Esempi:
+      https://my-store-name.myshopify.com  → My Store Name
+      https://mionegozio.it                → Mionegozio
+      https://www.mio-negozio.it           → Mio Negozio
+      https://shop.mionegozio.it           → Mionegozio
     """
-    netloc = urlparse(url).netloc
-    subdomain = netloc.split('.')[0]
-    return subdomain.replace('-', ' ').replace('_', ' ').title()
+    netloc = urlparse(url).netloc.lower()
+
+    if '.myshopify.com' in netloc:
+        subdomain = netloc.split('.myshopify.com')[0]
+        return subdomain.replace('-', ' ').replace('_', ' ').title()
+    else:
+        # Rimuove sottodomini comuni (www, shop, store...)
+        COMMON_SUBDOMAINS = {'www', 'shop', 'store', 'negozio', 'boutique'}
+        parts = netloc.split('.')
+        domain_parts = [p for p in parts[:-1] if p not in COMMON_SUBDOMAINS]
+        name = domain_parts[-1] if domain_parts else parts[0]
+        return name.replace('-', ' ').replace('_', ' ').title()
 
 
 def import_stores_from_content(content: str, niche: str = 'altro', source_label: str = '') -> dict:
@@ -62,9 +105,10 @@ def import_stores_from_content(content: str, niche: str = 'altro', source_label:
     Importa store da testo grezzo (contenuto di un file .txt o .py).
 
     Ritorna un dict con:
-      - imported: lista di Store creati
-      - skipped:  lista di URL già esistenti
-      - errors:   lista di URL non validi
+      - imported:    lista di Store creati
+      - skipped:     lista di URL già esistenti
+      - errors:      lista di URL non validi
+      - total_found: totale URL trovati nel testo
     """
     urls = parse_urls_from_text(content)
 
@@ -76,7 +120,6 @@ def import_stores_from_content(content: str, niche: str = 'altro', source_label:
         try:
             url = normalize_url(raw_url)
 
-            # Deduplicazione: get_or_create per URL
             store, created = Store.objects.get_or_create(
                 url=url,
                 defaults={
@@ -97,8 +140,8 @@ def import_stores_from_content(content: str, niche: str = 'altro', source_label:
             errors.append({'url': raw_url, 'error': str(e)})
 
     return {
-        'imported': imported,
-        'skipped':  skipped,
-        'errors':   errors,
+        'imported':    imported,
+        'skipped':     skipped,
+        'errors':      errors,
         'total_found': len(urls),
-    }
+    }   

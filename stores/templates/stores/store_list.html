@@ -35,12 +35,23 @@
     transition: background .15s;
   }
   #active-job-banner .btn-live:hover { background: #6d28d9; color: #fff; }
+
+  /* ── WhatsApp button ── */
+  .btn-wa-inline {
+    font-size: 11px; padding: 3px 10px; border-radius: 6px;
+    border: 1px solid #25d366; color: #25d366; background: transparent;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .btn-wa-inline:hover:not(:disabled) {
+    background: #25d366; color: #fff;
+  }
+  .btn-wa-inline:disabled { opacity: .5; cursor: not-allowed; }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- ── Banner job attivo (nascosto di default, JS lo mostra) ── -->
+<!-- ── Banner job attivo ── -->
 <div id="active-job-banner">
   <div class="pulse"></div>
   <div class="job-text">
@@ -85,7 +96,7 @@
       <div class="col-sm-6 col-md-3 col-lg-2">
         <label class="form-label small fw-semibold mb-1">Ordina per</label>
         <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()">
-          <option value="-discovered_at" {% if filter_sort == '-discovered_at' %}selected{% endif %}>Piu recenti</option>
+          <option value="-discovered_at" {% if filter_sort == '-discovered_at' %}selected{% endif %}>Più recenti</option>
           <option value="discovered_at"  {% if filter_sort == 'discovered_at'  %}selected{% endif %}>Meno recenti</option>
           <option value="name"           {% if filter_sort == 'name'           %}selected{% endif %}>Nome</option>
           <option value="status"         {% if filter_sort == 'status'         %}selected{% endif %}>Status</option>
@@ -134,6 +145,9 @@
           <i class="bi bi-play-circle me-1"></i>Analizza tutti ({{ counts.new }} NEW)
         </button>
       </form>
+      <a href="{% url 'stores:whatsapp_list' %}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-whatsapp me-1"></i>WhatsApp
+      </a>
       <a href="{% url 'stores:run_selenium' %}" class="btn btn-sm btn-primary">
         <i class="bi bi-robot me-1"></i>Cerca nuovi
       </a>
@@ -149,6 +163,7 @@
           <th>Nicchia</th>
           <th>Status</th>
           <th>Email</th>
+          <th>WhatsApp</th>
           <th>Lead Score</th>
           <th>Aggiunto</th>
           <th></th>
@@ -174,6 +189,25 @@
               <small class="text-muted">—</small>
             {% endif %}
           </td>
+
+          <!-- ── Colonna WhatsApp ── -->
+          <td id="wa-cell-{{ store.pk }}">
+            {% if store.whatsapp_url %}
+              <a href="{{ store.whatsapp_url }}" target="_blank"
+                 class="text-success text-decoration-none" style="font-size:12px">
+                <i class="bi bi-whatsapp me-1"></i>{{ store.whatsapp_url|cut:"https://wa.me/" }}
+              </a>
+            {% elif store.whatsapp_analyzed_at %}
+              <small class="text-muted">❌ Nessun widget</small>
+            {% else %}
+              <button class="btn-wa-inline"
+                      id="wa-btn-{{ store.pk }}"
+                      onclick="analyzeWA({{ store.pk }}, this)">
+                <i class="bi bi-whatsapp"></i> Analizza
+              </button>
+            {% endif %}
+          </td>
+
           <td>
             {% with score=store.lead_score %}
               {% if score is not None %}
@@ -242,10 +276,9 @@
 
 {% block extra_js %}
 <script>
-// ── Polling job attivo ─────────────────────────────────────
-// Salviamo il job_id attivo in sessionStorage quando viene creato.
-// Il banner legge da sessionStorage e fa polling sull'API.
-
+// ══════════════════════════════════════════════════════════
+// POLLING JOB ANALISI ATTIVO
+// ══════════════════════════════════════════════════════════
 const banner    = document.getElementById('active-job-banner');
 const banTitle  = document.getElementById('banner-title');
 const banSub    = document.getElementById('banner-sub');
@@ -262,60 +295,68 @@ function stopPolling() {
 
 async function checkJob() {
   if (!activeJobId) return;
-
   try {
     const res  = await fetch(`/analyzer/job/${activeJobId}/api/`);
     if (!res.ok) { stopPolling(); return; }
-
     const data = await res.json();
 
     if (data.status === 'running') {
-      // Mostra banner
       banner.style.display = 'flex';
       banLink.href = `/analyzer/job/${activeJobId}/`;
-
       if (data.type === 'bulk') {
         const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
         banTitle.textContent = `Analisi bulk in corso — ${data.completed}/${data.total} store (${pct}%)`;
-        banSub.textContent   = data.current_name
-          ? `⟳ Sto analizzando: ${data.current_name}`
-          : 'Inizializzazione...';
+        banSub.textContent   = data.current_name ? `⟳ Sto analizzando: ${data.current_name}` : 'Inizializzazione...';
       } else {
         banTitle.textContent = 'Analisi store in corso...';
-        banSub.textContent   = data.current_name
-          ? `⟳ ${data.current_name}`
-          : 'Avvio analisi...';
+        banSub.textContent   = data.current_name ? `⟳ ${data.current_name}` : 'Avvio analisi...';
       }
-
     } else {
-      // Job completato o errore → ferma polling e nascondi
       stopPolling();
     }
-
-  } catch (e) {
-    // Errore di rete — non fare nulla, riprova al prossimo tick
-  }
+  } catch (e) {}
 }
 
-// Avvia polling solo se c'è un job attivo in sessionStorage
 if (activeJobId) {
   checkJob();
   pollTimer = setInterval(checkJob, 3000);
 }
 
-// ── Intercetta i form di analisi per salvare il job_id ─────
-// Quando viene fatto il redirect a /analyzer/job/<id>/,
-// salviamo l'id in sessionStorage così il banner funziona
-// anche tornando sulla store_list.
-//
-// Soluzione: intercettiamo il form submit e leggiamo
-// l'header Location dalla risposta fetch — ma siccome
-// Django fa redirect server-side, usiamo un approccio
-// diverso: salviamo in sessionStorage dal job_status.html
-// (vedi sotto) e qui leggiamo.
-//
-// Il job_status.html salva il job_id con:
-//   sessionStorage.setItem('active_job_id', JOB_ID);
-// Qui sopra lo leggiamo e facciamo polling.
+// ══════════════════════════════════════════════════════════
+// ANALISI WHATSAPP INLINE
+// ══════════════════════════════════════════════════════════
+const WA_CSRF = '{{ csrf_token }}';
+
+async function analyzeWA(pk, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> ...';
+
+  try {
+    const res  = await fetch(`/stores/${pk}/whatsapp-analyze/`, {
+      method:  'POST',
+      headers: { 'X-CSRFToken': WA_CSRF },
+    });
+    const data = await res.json();
+    const cell = document.getElementById('wa-cell-' + pk);
+
+    if (data.status === 'found') {
+      cell.innerHTML = `
+        <a href="${data.whatsapp_url}" target="_blank"
+           class="text-success text-decoration-none" style="font-size:12px">
+          <i class="bi bi-whatsapp me-1"></i>${data.number}
+        </a>`;
+    } else if (data.status === 'not_found') {
+      cell.innerHTML = `<small class="text-muted">❌ Nessun widget</small>`;
+    } else if (data.status === 'skipped') {
+      cell.innerHTML = `<small class="text-muted">✓ Già analizzato</small>`;
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-whatsapp"></i> Riprova';
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-whatsapp"></i> Analizza';
+  }
+}
 </script>
 {% endblock %}

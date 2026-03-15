@@ -10,6 +10,11 @@ urlpatterns = [
     path('stores/<int:pk>/change-status/', views.change_status, name='change_status'),
     path('import/', views.import_stores, name='import_stores'),
     path('selenium/', views.run_selenium, name='run_selenium'),
+    path('stores/whatsapp/', views.whatsapp_list, name='whatsapp_list'),
+    path('stores/<int:pk>/whatsapp-analyze/', views.analyze_whatsapp_ajax, name='analyze_whatsapp_ajax'),
+
+
+
 
     # ── Configurazione messaggi ──────────────────────────────────────────────
     path('settings/messages/', views.message_templates, name='message_templates'),

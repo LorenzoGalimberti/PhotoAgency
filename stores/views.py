@@ -2,12 +2,16 @@ import json
 import subprocess
 import sys
 import os
+import re
 from pathlib import Path
-
+from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .forms import ImportStoresForm, SeleniumSearchForm
 from .services import import_stores_from_content
@@ -235,9 +239,6 @@ def store_detail(request, pk):
     analyses = store.analyses.order_by('-created_at')
     contacts = store.contact_logs.order_by('-sent_at')
 
-    # Carica template attivi e sostituisce variabili lato server
-    import re
-
     def render_body(body):
         def replace_var(m):
             var = m.group(1).strip()
@@ -280,7 +281,6 @@ def change_status(request, pk):
 # ─── CRUD MessageTemplate ────────────────────────────────────────────────────
 
 def message_templates(request):
-    """Lista di tutti i template messaggi."""
     templates = MessageTemplate.objects.all()
     return render(request, 'stores/message_templates.html', {
         'templates': templates,
@@ -288,7 +288,6 @@ def message_templates(request):
 
 
 def message_template_create(request):
-    """Crea un nuovo template."""
     if request.method == 'POST':
         name       = request.POST.get('name', '').strip()
         body       = request.POST.get('body', '').strip()
@@ -311,7 +310,6 @@ def message_template_create(request):
 
 
 def message_template_edit(request, pk):
-    """Modifica un template esistente."""
     tmpl = get_object_or_404(MessageTemplate, pk=pk)
 
     if request.method == 'POST':
@@ -337,7 +335,6 @@ def message_template_edit(request, pk):
 
 
 def message_template_delete(request, pk):
-    """Elimina un template (solo POST)."""
     tmpl = get_object_or_404(MessageTemplate, pk=pk)
     if request.method == 'POST':
         name = tmpl.name
@@ -347,10 +344,107 @@ def message_template_delete(request, pk):
 
 
 def message_template_set_default(request, pk):
-    """Imposta un template come default (solo POST)."""
     tmpl = get_object_or_404(MessageTemplate, pk=pk)
     if request.method == 'POST':
         tmpl.is_default = True
         tmpl.save()
         messages.success(request, f"\"{tmpl.name}\" impostato come default.")
     return redirect('stores:message_templates')
+
+
+# ─── WhatsApp ────────────────────────────────────────────────────────────────
+
+def whatsapp_list(request):
+    found     = Store.objects.filter(whatsapp_analyzed_at__isnull=False).exclude(whatsapp_url='').order_by('-whatsapp_analyzed_at')
+    not_found = Store.objects.filter(whatsapp_analyzed_at__isnull=False, whatsapp_url='').order_by('-whatsapp_analyzed_at')
+    pending   = Store.objects.filter(whatsapp_analyzed_at__isnull=True).order_by('-discovered_at')
+
+    return render(request, 'stores/whatsapp_list.html', {
+        'found':           found,
+        'not_found':       not_found,
+        'pending':         pending,
+        'total_found':     found.count(),
+        'total_not_found': not_found.count(),
+        'total_pending':   pending.count(),
+    })
+
+@csrf_exempt
+@require_POST
+def analyze_whatsapp_ajax(request, pk):
+    import traceback
+    try:
+        store = get_object_or_404(Store, pk=pk)
+
+        # Skip se già analizzato (a meno che non sia force)
+        force = request.GET.get('force') == '1'
+        if store.whatsapp_analyzed_at is not None and not force:
+            return JsonResponse({
+                'status':       'skipped',
+                'number':       store.whatsapp_url or '',
+                'whatsapp_url': store.whatsapp_url or '',
+                'message':      'Già analizzato',
+            })
+
+        script_path = Path(settings.BASE_DIR) / 'scripts' / 'wa_step2_extract.py'
+        if not script_path.exists():
+            return JsonResponse({
+                'status':  'error',
+                'message': f'Script non trovato: {script_path}',
+            }, status=500)
+
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        env['PYTHONUTF8']       = '1'
+
+        proc = subprocess.run(
+            [sys.executable, str(script_path), store.url],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            timeout=60,
+            env=env,
+        )
+        raw_number = (proc.stdout or '').strip()
+
+        whatsapp_url = ''
+        if raw_number:
+            clean = raw_number.replace('+', '').replace(' ', '').replace('-', '')
+            whatsapp_url = f'https://wa.me/{clean}'
+
+        store.whatsapp_url         = whatsapp_url
+        store.whatsapp_analyzed_at = timezone.now()
+        store.save(update_fields=['whatsapp_url', 'whatsapp_analyzed_at'])
+
+        if whatsapp_url:
+            return JsonResponse({
+                'status':       'found',
+                'number':       raw_number,
+                'whatsapp_url': whatsapp_url,
+                'message':      f'Numero trovato: {raw_number}',
+            })
+        else:
+            return JsonResponse({
+                'status':       'not_found',
+                'number':       '',
+                'whatsapp_url': '',
+                'message':      'Nessun widget WhatsApp trovato',
+            })
+
+    except subprocess.TimeoutExpired:
+        store.whatsapp_analyzed_at = timezone.now()
+        store.save(update_fields=['whatsapp_analyzed_at'])
+        return JsonResponse({
+            'status':  'timeout',
+            'message': 'Timeout (>60s) — store troppo lento',
+        })
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        print("=== WA ANALYZE ERROR ===")
+        print(tb)
+        print("========================")
+        return JsonResponse({
+            'status':  'error',
+            'message': str(e),
+            'traceback': tb,
+        }, status=500)

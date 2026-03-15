@@ -35,6 +35,11 @@ class Store(models.Model):
     email         = models.EmailField(blank=True, verbose_name='Email principale')
     phone         = models.CharField(max_length=50, blank=True)
     whatsapp_url  = models.URLField(blank=True)
+    whatsapp_analyzed_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Analisi WhatsApp il',
+        help_text='Popolato anche se il numero non è stato trovato (evita ri-analisi)',
+    )
     piva          = models.CharField(max_length=20, blank=True, verbose_name='P.IVA')
     address       = models.TextField(blank=True, verbose_name='Indirizzo')
     instagram     = models.URLField(blank=True)
@@ -69,6 +74,15 @@ class Store(models.Model):
     @property
     def social_count(self):
         return sum(1 for s in [self.instagram, self.facebook, self.tiktok, self.linkedin] if s)
+
+    @property
+    def whatsapp_status(self):
+        """Ritorna: 'found' | 'not_found' | 'pending'"""
+        if self.whatsapp_url:
+            return 'found'
+        if self.whatsapp_analyzed_at:
+            return 'not_found'
+        return 'pending'
 
 
 class StoreAnalysis(models.Model):
@@ -205,7 +219,7 @@ class MessageTemplate(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        # Se questo viene marcato default, togli default agli altri
         if self.is_default:
             MessageTemplate.objects.exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
+        
