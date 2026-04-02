@@ -11,13 +11,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .forms import ImportStoresForm, SeleniumSearchForm
 from .services import import_stores_from_content
 from .models import Store, StoreAnalysis, NicheQueryTemplate, MessageTemplate
+
+
+# ─── Costante stati "contattato" ─────────────────────────────────────────────
+CONTACTED_STATUSES = ['contacted', 'replied', 'converted']
 
 
 def dashboard(request):
@@ -270,13 +274,39 @@ def store_detail(request, pk):
 
 
 def change_status(request, pk):
+    """
+    Cambia lo status di uno store.
+    - Se richiesta normale (form) → redirect a store_detail
+    - Se richiesta AJAX (X-Requested-With: XMLHttpRequest oppure Accept: application/json) → JsonResponse
+    """
     store = get_object_or_404(Store, pk=pk)
     if request.method == 'POST':
         new_status = request.POST.get('status')
         if new_status in dict(Store.Status.choices):
             store.status = new_status
             store.save(update_fields=['status'])
+
+            # Risposta AJAX
+            is_ajax = (
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                or 'application/json' in request.headers.get('Accept', '')
+            )
+            if is_ajax:
+                return JsonResponse({
+                    'ok':          True,
+                    'status':      store.status,
+                    'status_label': store.get_status_display(),
+                })
+
             messages.success(request, f"Stato aggiornato: {store.get_status_display()}")
+        else:
+            is_ajax = (
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                or 'application/json' in request.headers.get('Accept', '')
+            )
+            if is_ajax:
+                return JsonResponse({'ok': False, 'error': 'Stato non valido'}, status=400)
+
     return redirect('stores:store_detail', pk=pk)
 
 
@@ -357,18 +387,51 @@ def message_template_set_default(request, pk):
 # ─── WhatsApp ────────────────────────────────────────────────────────────────
 
 def whatsapp_list(request):
-    found     = Store.objects.filter(whatsapp_analyzed_at__isnull=False).exclude(whatsapp_url='').order_by('-whatsapp_analyzed_at')
-    not_found = Store.objects.filter(whatsapp_analyzed_at__isnull=False, whatsapp_url='').order_by('-whatsapp_analyzed_at')
-    pending   = Store.objects.filter(whatsapp_analyzed_at__isnull=True).order_by('-discovered_at')
+    # Base queryset store con numero trovato
+    found_qs = (
+        Store.objects
+        .filter(whatsapp_analyzed_at__isnull=False)
+        .exclude(whatsapp_url='')
+        .order_by('-whatsapp_analyzed_at')
+    )
+
+    # Filtro contattati: '' = tutti | 'yes' = contattati | 'no' = non contattati
+    contacted_filter = request.GET.get('contacted', '')
+    if contacted_filter == 'yes':
+        found = found_qs.filter(status__in=CONTACTED_STATUSES)
+    elif contacted_filter == 'no':
+        found = found_qs.exclude(status__in=CONTACTED_STATUSES)
+    else:
+        found = found_qs
+
+    not_found = (
+        Store.objects
+        .filter(whatsapp_analyzed_at__isnull=False, whatsapp_url='')
+        .order_by('-whatsapp_analyzed_at')
+    )
+    pending = (
+        Store.objects
+        .filter(whatsapp_analyzed_at__isnull=True)
+        .order_by('-discovered_at')
+    )
+
+    # Contatori fissi (non dipendono dal filtro) per i badge tab
+    total_found     = found_qs.count()
+    total_contacted     = found_qs.filter(status__in=CONTACTED_STATUSES).count()
+    total_not_contacted = found_qs.exclude(status__in=CONTACTED_STATUSES).count()
 
     return render(request, 'stores/whatsapp_list.html', {
-        'found':           found,
-        'not_found':       not_found,
-        'pending':         pending,
-        'total_found':     found.count(),
-        'total_not_found': not_found.count(),
-        'total_pending':   pending.count(),
+        'found':                found,
+        'not_found':            not_found,
+        'pending':              pending,
+        'total_found':          total_found,
+        'total_not_found':      not_found.count(),
+        'total_pending':        pending.count(),
+        'contacted_filter':     contacted_filter,
+        'total_contacted':      total_contacted,
+        'total_not_contacted':  total_not_contacted,
     })
+
 
 @csrf_exempt
 @require_POST
@@ -452,10 +515,6 @@ def analyze_whatsapp_ajax(request, pk):
         }, status=500)
 
 
-
-        import csv
-from django.http import HttpResponse
-
 def export_stores_urls(request):
     """
     Esporta tutti gli URL degli store in un file .txt (uno per riga).
@@ -463,7 +522,6 @@ def export_stores_urls(request):
     """
     qs = Store.objects.all()
 
-    # Filtri opzionali: ?status=new&niche=moda
     status = request.GET.get('status')
     niche  = request.GET.get('niche')
     if status:

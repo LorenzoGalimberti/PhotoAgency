@@ -79,7 +79,7 @@
   .btn-wa-analyze:hover:not(:disabled) { background: #7c3aed; color: #fff; }
   .btn-wa-analyze:disabled { opacity: .45; cursor: not-allowed; }
 
-  /* ── Badge stato ── */
+  /* ── Badge stato WA ── */
   .wa-badge {
     display: inline-block; padding: 3px 10px;
     border-radius: 10px; font-size: 11px; font-weight: 600;
@@ -89,6 +89,42 @@
   .wa-badge-pending  { background: #ede9fe; color: #7c3aed; }
   .wa-badge-loading  { background: #fef3c7; color: #92400e; }
   .wa-badge-error    { background: #fee2e2; color: #b91c1c; }
+
+  /* ── Badge contattato ── */
+  .badge-contacted     { background: #dcfce7; color: #15803d; }
+  .badge-not-contacted { background: #f3f4f6; color: #6b7280; }
+
+  /* ── Filtro contattati ── */
+  .wa-filter-bar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .wa-filter-btn {
+    padding: 5px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 2px solid #e5e7eb;
+    background: #fff; color: #6b7280; text-decoration: none; display: inline-block;
+    transition: all .15s;
+  }
+  .wa-filter-btn:hover { border-color: #d1d5db; color: #374151; text-decoration: none; }
+  .wa-filter-btn.f-all  { }
+  .wa-filter-btn.f-all.active  { background: #1f2937; border-color: #1f2937; color: #fff; }
+  .wa-filter-btn.f-yes.active  { background: #16a34a; border-color: #16a34a; color: #fff; }
+  .wa-filter-btn.f-no.active   { background: #dc2626; border-color: #dc2626; color: #fff; }
+
+  /* ── Pulsante toggle contattato ── */
+  .btn-toggle-contact {
+    font-size: 11px; padding: 3px 10px; border-radius: 6px;
+    border: 1px solid #d1d5db; color: #6b7280; background: transparent;
+    cursor: pointer; transition: all .15s; white-space: nowrap; display: block;
+    margin-top: 4px;
+  }
+  .btn-toggle-contact:hover:not(:disabled) { border-color: #16a34a; color: #16a34a; }
+  .btn-toggle-contact.is-contacted         { border-color: #16a34a; color: #15803d; background: #f0fdf4; }
+  .btn-toggle-contact.is-contacted:hover:not(:disabled) { border-color: #dc2626; color: #dc2626; background: #fff; }
+  .btn-toggle-contact:disabled             { opacity: .45; cursor: not-allowed; }
+
+  /* ── Riga evidenziata se contattata ── */
+  tr.row-contacted { background: #f0fdf4 !important; }
 
   /* ── Link WA ── */
   .wa-link {
@@ -144,6 +180,10 @@
     <div class="wa-stat-lbl">✅ Trovati</div>
   </div>
   <div class="wa-stat">
+    <div class="wa-stat-num" style="color:#16a34a">{{ total_contacted }}</div>
+    <div class="wa-stat-lbl">📨 Contattati</div>
+  </div>
+  <div class="wa-stat">
     <div class="wa-stat-num" style="color:#ef4444">{{ total_not_found }}</div>
     <div class="wa-stat-lbl">❌ Non trovati</div>
   </div>
@@ -189,13 +229,40 @@
      TAB: TROVATI
 ════════════════════════════════════════════ -->
 <div class="wa-panel active" id="panel-found">
+
+  <!-- ── Filtro contattati ── -->
+  <div class="wa-filter-bar">
+    <span style="font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap">Filtra contattati:</span>
+    <a href="?" class="wa-filter-btn f-all {% if not contacted_filter %}active{% endif %}">
+      Tutti
+      <span class="ms-1 opacity-75">{{ total_found }}</span>
+    </a>
+    <a href="?contacted=no" class="wa-filter-btn f-no {% if contacted_filter == 'no' %}active{% endif %}">
+      ⬜ Non contattati
+      <span class="ms-1 opacity-75">{{ total_not_contacted }}</span>
+    </a>
+    <a href="?contacted=yes" class="wa-filter-btn f-yes {% if contacted_filter == 'yes' %}active{% endif %}">
+      ✅ Contattati
+      <span class="ms-1 opacity-75">{{ total_contacted }}</span>
+    </a>
+  </div>
+
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
       <h6 class="mb-0 fw-semibold">
         <i class="bi bi-whatsapp text-success me-1"></i>Store con widget WhatsApp
       </h6>
-      <small class="text-muted">{{ total_found }} store</small>
+      <small class="text-muted">
+        {% if contacted_filter == 'yes' %}
+          {{ found|length }} contattati
+        {% elif contacted_filter == 'no' %}
+          {{ found|length }} non contattati
+        {% else %}
+          {{ total_found }} store
+        {% endif %}
+      </small>
     </div>
+
     {% if found %}
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
@@ -205,13 +272,15 @@
             <th>Nicchia</th>
             <th>Numero</th>
             <th>Contatto diretto</th>
+            <th>Contattato</th>
             <th>Analizzato il</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for store in found %}
-          <tr id="row-{{ store.pk }}">
+          <tr id="row-{{ store.pk }}"
+              class="{% if store.status == 'contacted' or store.status == 'replied' or store.status == 'converted' %}row-contacted{% endif %}">
             <td class="ps-3">
               <div class="fw-semibold" style="font-size:13px">{{ store.name|default:store.domain }}</div>
               <small>
@@ -231,6 +300,32 @@
                 <i class="bi bi-whatsapp"></i> Apri chat
               </a>
             </td>
+
+            <!-- ── Colonna Contattato ── -->
+            <td id="contact-cell-{{ store.pk }}">
+              {% if store.status == 'contacted' or store.status == 'replied' or store.status == 'converted' %}
+                <span class="wa-badge badge-contacted" id="contact-badge-{{ store.pk }}">
+                  ✅ {{ store.get_status_display }}
+                </span>
+                <button class="btn-toggle-contact is-contacted"
+                        id="contact-btn-{{ store.pk }}"
+                        onclick="toggleContacted({{ store.pk }}, false, this)"
+                        title="Segna come non contattato">
+                  <i class="bi bi-x-lg"></i> Annulla
+                </button>
+              {% else %}
+                <span class="wa-badge badge-not-contacted" id="contact-badge-{{ store.pk }}">
+                  ⬜ Non contattato
+                </span>
+                <button class="btn-toggle-contact"
+                        id="contact-btn-{{ store.pk }}"
+                        onclick="toggleContacted({{ store.pk }}, true, this)"
+                        title="Segna come contattato">
+                  <i class="bi bi-check-lg"></i> Segna
+                </button>
+              {% endif %}
+            </td>
+
             <td>
               <small class="text-muted">{{ store.whatsapp_analyzed_at|date:"d/m/Y H:i" }}</small>
             </td>
@@ -248,8 +343,12 @@
     {% else %}
     <div class="empty-state">
       <i class="bi bi-whatsapp"></i>
-      <p class="mb-0">Nessun numero trovato ancora.</p>
-      <small>Avvia l'analisi dalla tab Pending.</small>
+      <p class="mb-0">
+        {% if contacted_filter == 'yes' %}Nessuno store contattato ancora.
+        {% elif contacted_filter == 'no' %}Tutti i trovati sono già stati contattati!
+        {% else %}Nessun numero trovato ancora.{% endif %}
+      </p>
+      {% if not contacted_filter %}<small>Avvia l'analisi dalla tab Pending.</small>{% endif %}
     </div>
     {% endif %}
   </div>
@@ -409,6 +508,58 @@ function showTab(name, el) {
 }
 
 // ══════════════════════════════════════════════════════════
+// TOGGLE CONTATTATO — senza reload pagina
+// ══════════════════════════════════════════════════════════
+async function toggleContacted(pk, markAsContacted, btn) {
+  btn.disabled = true;
+  const newStatus = markAsContacted ? 'contacted' : 'analyzed';
+
+  try {
+    const res = await fetch(`/stores/${pk}/change-status/`, {
+      method:  'POST',
+      headers: {
+        'X-CSRFToken':     CSRF_TOKEN,
+        'Content-Type':    'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: `status=${newStatus}`,
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Errore sconosciuto');
+
+    const badge = document.getElementById('contact-badge-' + pk);
+    const row   = document.getElementById('row-' + pk);
+
+    if (markAsContacted) {
+      // → diventa contattato
+      badge.className   = 'wa-badge badge-contacted';
+      badge.textContent = '✅ Contattato';
+      btn.className     = 'btn-toggle-contact is-contacted';
+      btn.innerHTML     = '<i class="bi bi-x-lg"></i> Annulla';
+      btn.onclick       = () => toggleContacted(pk, false, btn);
+      btn.title         = 'Segna come non contattato';
+      if (row) row.classList.add('row-contacted');
+    } else {
+      // → torna non contattato
+      badge.className   = 'wa-badge badge-not-contacted';
+      badge.textContent = '⬜ Non contattato';
+      btn.className     = 'btn-toggle-contact';
+      btn.innerHTML     = '<i class="bi bi-check-lg"></i> Segna';
+      btn.onclick       = () => toggleContacted(pk, true, btn);
+      btn.title         = 'Segna come contattato';
+      if (row) row.classList.remove('row-contacted');
+    }
+  } catch (e) {
+    console.error('Toggle status error:', e);
+    alert('Errore nel cambio stato. Riprova.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 // ANALISI SINGOLO STORE
 // ══════════════════════════════════════════════════════════
 let bulkRunning = false;
@@ -438,7 +589,6 @@ async function analyzeStore(pk, btn, force = false) {
       if (badge) { badge.className = 'wa-badge wa-badge-found'; badge.textContent = '✅ ' + data.number; }
       btn.innerHTML = '<i class="bi bi-check-circle"></i> Trovato';
       btn.style.cssText = 'border-color:#25d366;color:#15803d;';
-      // Aggiunge link WA inline
       const td = badge ? badge.parentElement : null;
       if (td && !td.querySelector('.wa-link')) {
         const link = document.createElement('a');
@@ -490,7 +640,6 @@ async function analyzeAllPending() {
   bulkBar.style.display = 'block';
   if (btnAll) { btnAll.disabled = true; btnAll.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>In corso...'; }
 
-  // Switcha sulla tab pending per vedere il progresso live
   document.querySelectorAll('.wa-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.wa-panel').forEach(p => p.classList.remove('active'));
   document.querySelector('.wa-tab.tab-pend').classList.add('active');
@@ -519,7 +668,6 @@ async function analyzeAllPending() {
     await new Promise(r => setTimeout(r, 600));
   }
 
-  // Completato
   bulkRunning = false;
   document.getElementById('wa-live-banner').style.display = 'none';
   document.getElementById('wa-bulk-fill').style.width     = '100%';
