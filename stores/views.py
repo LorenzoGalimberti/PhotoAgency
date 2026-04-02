@@ -1,4 +1,6 @@
 import json
+import csv  
+
 import subprocess
 import sys
 import os
@@ -448,3 +450,65 @@ def analyze_whatsapp_ajax(request, pk):
             'message': str(e),
             'traceback': tb,
         }, status=500)
+
+
+
+        import csv
+from django.http import HttpResponse
+
+def export_stores_urls(request):
+    """
+    Esporta tutti gli URL degli store in un file .txt (uno per riga).
+    Opzionale: filtro per status e/o nicchia via query param.
+    """
+    qs = Store.objects.all()
+
+    # Filtri opzionali: ?status=new&niche=moda
+    status = request.GET.get('status')
+    niche  = request.GET.get('niche')
+    if status:
+        qs = qs.filter(status=status)
+    if niche:
+        qs = qs.filter(niche=niche)
+
+    response = HttpResponse(content_type='text/plain; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="stores_urls.txt"'
+
+    for store in qs.values_list('url', flat=True):
+        response.write(store + '\n')
+
+    return response
+
+
+def export_stores_csv(request):
+    """
+    Esporta gli store in CSV con url, email, nicchia, status, lead_score.
+    """
+    qs = Store.objects.all()
+
+    status = request.GET.get('status')
+    niche  = request.GET.get('niche')
+    if status:
+        qs = qs.filter(status=status)
+    if niche:
+        qs = qs.filter(niche=niche)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="stores.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['url', 'name', 'email', 'niche', 'status', 'phone', 'instagram', 'discovered_at'])
+
+    for s in qs.select_related():
+        writer.writerow([
+            s.url,
+            s.name,
+            s.email,
+            s.niche,
+            s.status,
+            s.phone,
+            s.instagram,
+            s.discovered_at.strftime('%Y-%m-%d') if s.discovered_at else '',
+        ])
+
+    return response

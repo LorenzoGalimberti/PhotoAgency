@@ -22,4 +22,6 @@ urlpatterns = [
     path('settings/messages/<int:pk>/edit/', views.message_template_edit, name='message_template_edit'),
     path('settings/messages/<int:pk>/delete/', views.message_template_delete, name='message_template_delete'),
     path('settings/messages/<int:pk>/set-default/', views.message_template_set_default, name='message_template_set_default'),
+    path('export/urls/',  views.export_stores_urls, name='export_urls'),
+    path('export/csv/',   views.export_stores_csv,  name='export_csv'),
 ]
