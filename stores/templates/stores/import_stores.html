@@ -21,21 +21,42 @@
             {{ form.file }}
             <div class="form-text">{{ form.file.help_text }}</div>
           </div>
+
           <div class="mb-3">
-    <label class="form-label fw-semibold">{{ form.urls_text.label }}</label>
-    {{ form.urls_text }}
-    <div class="form-text">{{ form.urls_text.help_text }}</div>
-</div>
+            <label class="form-label fw-semibold">{{ form.urls_text.label }}</label>
+            {{ form.urls_text }}
+            <div class="form-text">{{ form.urls_text.help_text }}</div>
+          </div>
 
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.niche.label }}</label>
             {{ form.niche }}
           </div>
 
-          <div class="mb-4">
+          <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.source_label.label }}</label>
             {{ form.source_label }}
             <div class="form-text">{{ form.source_label.help_text }}</div>
+          </div>
+
+          <!-- Filtro URL -->
+          <div class="mb-4 p-3 rounded" style="background:#f8f9fa; border: 1px solid #e9ecef;">
+            <div class="form-check form-switch">
+              {{ form.strict_filter }}
+              <label class="form-check-label fw-semibold" for="id_strict_filter">
+                {{ form.strict_filter.label }}
+              </label>
+            </div>
+            <div class="form-text mt-1">
+              <i class="bi bi-info-circle me-1 text-primary"></i>
+              {{ form.strict_filter.help_text }}
+            </div>
+            <!-- Badge stato filtro (aggiornato via JS) -->
+            <div class="mt-2">
+              <span id="filter-badge" class="badge bg-success">
+                <i class="bi bi-funnel me-1"></i>Solo .it e Shopify
+              </span>
+            </div>
           </div>
 
           <button type="submit" class="btn btn-primary w-100">
@@ -61,6 +82,12 @@ https://store-tre.myshopify.com</pre>
     "https://store-uno.myshopify.com",
     "https://store-due.myshopify.com",
 ]</pre>
+
+        <p class="small text-muted mb-2 mt-3"><strong>Filtro disattivato</strong> — accetta anche URL generici:</p>
+        <pre class="bg-light rounded p-2 small">https://mybrand.com
+https://store.example.eu
+https://negozio.de</pre>
+
         <p class="small text-muted mt-2 mb-0">
           <i class="bi bi-shield-check text-success me-1"></i>
           Deduplicazione automatica: gli store già presenti vengono saltati senza errori.
@@ -159,4 +186,25 @@ https://store-tre.myshopify.com</pre>
   </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Aggiorna il badge in base allo stato del checkbox
+  const checkbox = document.getElementById('id_strict_filter');
+  const badge    = document.getElementById('filter-badge');
+
+  function updateBadge() {
+    if (checkbox.checked) {
+      badge.className = 'badge bg-success';
+      badge.innerHTML = '<i class="bi bi-funnel me-1"></i>Solo .it e Shopify';
+    } else {
+      badge.className = 'badge bg-warning text-dark';
+      badge.innerHTML = '<i class="bi bi-funnel me-1"></i>Tutti gli URL accettati';
+    }
+  }
+
+  checkbox.addEventListener('change', updateBadge);
+  updateBadge(); // stato iniziale
+</script>
 {% endblock %}

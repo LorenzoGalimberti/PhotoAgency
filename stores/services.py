@@ -9,6 +9,8 @@ Formati URL supportati:
   2. https://mionegozio.it           (dominio .it root)
   3. https://www.mionegozio.it       (con www)
   4. https://shop.mionegozio.it      (sottodominio)
+
+Con strict_filter=False accetta qualsiasi URL HTTP/S (es. .com, .eu, .de, ecc.)
 """
 
 import re
@@ -16,14 +18,20 @@ from urllib.parse import urlparse
 from .models import Store
 
 
-def parse_urls_from_text(content: str) -> list[str]:
+def parse_urls_from_text(content: str, strict_filter: bool = True) -> list[str]:
     """
     Estrae tutti gli URL store da un testo.
-    Accetta myshopify.com, domini .it, sottodomini .it.
-    Funziona sia con file .txt (uno per riga) che con file .py (SEED_STORES = [...]).
+
+    Se strict_filter=True (default):
+      Accetta solo myshopify.com e domini .it
+    Se strict_filter=False:
+      Accetta qualsiasi URL HTTP/S valido
     """
-    # Pattern che cattura myshopify.com E tutti i domini .it
-    pattern = r'https?://[a-zA-Z0-9\-\.]+(?:\.myshopify\.com|\.it)(?:/[^\s\'"]*)?'
+    if strict_filter:
+        pattern = r'https?://[a-zA-Z0-9\-\.]+(?:\.myshopify\.com|\.it)(?:/[^\s\'"]*)?'
+    else:
+        pattern = r'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s\'"]*)?'
+
     found = re.findall(pattern, content)
 
     # Domini da escludere — non sono store
@@ -34,6 +42,10 @@ def parse_urls_from_text(content: str) -> list[str]:
         'wikipedia.it', 'www.wikipedia.it',
         'facebook.it', 'instagram.it', 'twitter.it',
         'youtube.it', 'linkedin.it',
+        # blacklist generica (usata anche in modalità no-filter)
+        'www.google.com', 'google.com', 'facebook.com', 'instagram.com',
+        'twitter.com', 'youtube.com', 'linkedin.com', 'wikipedia.org',
+        'web.archive.org', 'archive.org',
     }
 
     # Sottodomini Shopify interni da escludere
@@ -85,6 +97,7 @@ def extract_name_from_url(url: str) -> str:
       https://mionegozio.it                → Mionegozio
       https://www.mio-negozio.it           → Mio Negozio
       https://shop.mionegozio.it           → Mionegozio
+      https://mybrand.com                  → Mybrand
     """
     netloc = urlparse(url).netloc.lower()
 
@@ -100,9 +113,21 @@ def extract_name_from_url(url: str) -> str:
         return name.replace('-', ' ').replace('_', ' ').title()
 
 
-def import_stores_from_content(content: str, niche: str = 'altro', source_label: str = '') -> dict:
+def import_stores_from_content(
+    content: str,
+    niche: str = 'altro',
+    source_label: str = '',
+    strict_filter: bool = True,
+) -> dict:
     """
     Importa store da testo grezzo (contenuto di un file .txt o .py).
+
+    Args:
+      content:       testo grezzo con URL
+      niche:         nicchia da assegnare agli store importati
+      source_label:  etichetta sorgente (es. "Import Manuale")
+      strict_filter: se True filtra solo .it e myshopify.com;
+                     se False accetta qualsiasi URL HTTP/S
 
     Ritorna un dict con:
       - imported:    lista di Store creati
@@ -110,7 +135,7 @@ def import_stores_from_content(content: str, niche: str = 'altro', source_label:
       - errors:      lista di URL non validi
       - total_found: totale URL trovati nel testo
     """
-    urls = parse_urls_from_text(content)
+    urls = parse_urls_from_text(content, strict_filter=strict_filter)
 
     imported = []
     skipped  = []
@@ -144,4 +169,4 @@ def import_stores_from_content(content: str, niche: str = 'altro', source_label:
         'skipped':     skipped,
         'errors':      errors,
         'total_found': len(urls),
-    }   
+    }

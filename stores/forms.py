@@ -38,6 +38,14 @@ class ImportStoresForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control'})
     )
 
+    strict_filter = forms.BooleanField(
+        label='Filtra solo .it e Shopify',
+        required=False,
+        initial=True,
+        help_text='Deseleziona per importare qualsiasi URL (.com, .eu, ecc.)',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_strict_filter'})
+    )
+
 
 class SeleniumSearchForm(forms.Form):
 
@@ -62,7 +70,6 @@ class SeleniumSearchForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
-    # ✅ NUOVO: range pagine
     page_from = forms.ChoiceField(
         label='Dalla pagina',
         initial='1',

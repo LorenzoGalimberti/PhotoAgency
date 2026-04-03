@@ -44,9 +44,10 @@ def import_stores(request):
     if request.method == 'POST':
         form = ImportStoresForm(request.POST, request.FILES)
         if form.is_valid():
-            niche        = form.cleaned_data['niche']
-            source_label = form.cleaned_data.get('source_label', '')
-            content      = ''
+            niche         = form.cleaned_data['niche']
+            source_label  = form.cleaned_data.get('source_label', '')
+            strict_filter = form.cleaned_data.get('strict_filter', True)
+            content       = ''
 
             if request.FILES.get('file'):
                 uploaded_file = request.FILES['file']
@@ -66,6 +67,7 @@ def import_stores(request):
                 content=content,
                 niche=niche,
                 source_label=source_label or 'Import Manuale',
+                strict_filter=strict_filter,
             )
 
             n_imported = len(result['imported'])
@@ -79,9 +81,14 @@ def import_stores(request):
             if n_errors > 0:
                 messages.warning(request, f"{n_errors} URL non validi o errori.")
             if result['total_found'] == 0:
-                messages.error(request,
-                    "Nessun URL Shopify trovato. "
-                    "Il file deve contenere URL tipo https://store.myshopify.com")
+                if strict_filter:
+                    messages.error(request,
+                        "Nessun URL Shopify/.it trovato. "
+                        "Il file deve contenere URL tipo https://store.myshopify.com "
+                        "oppure deseleziona il filtro per accettare qualsiasi URL.")
+                else:
+                    messages.error(request,
+                        "Nessun URL valido trovato nel testo inserito.")
 
             request.session['import_result'] = {
                 'imported':    [s.url for s in result['imported']],
@@ -286,15 +293,14 @@ def change_status(request, pk):
             store.status = new_status
             store.save(update_fields=['status'])
 
-            # Risposta AJAX
             is_ajax = (
                 request.headers.get('X-Requested-With') == 'XMLHttpRequest'
                 or 'application/json' in request.headers.get('Accept', '')
             )
             if is_ajax:
                 return JsonResponse({
-                    'ok':          True,
-                    'status':      store.status,
+                    'ok':           True,
+                    'status':       store.status,
                     'status_label': store.get_status_display(),
                 })
 
@@ -387,7 +393,6 @@ def message_template_set_default(request, pk):
 # ─── WhatsApp ────────────────────────────────────────────────────────────────
 
 def whatsapp_list(request):
-    # Base queryset store con numero trovato
     found_qs = (
         Store.objects
         .filter(whatsapp_analyzed_at__isnull=False)
@@ -395,7 +400,6 @@ def whatsapp_list(request):
         .order_by('-whatsapp_analyzed_at')
     )
 
-    # Filtro contattati: '' = tutti | 'yes' = contattati | 'no' = non contattati
     contacted_filter = request.GET.get('contacted', '')
     if contacted_filter == 'yes':
         found = found_qs.filter(status__in=CONTACTED_STATUSES)
@@ -415,8 +419,7 @@ def whatsapp_list(request):
         .order_by('-discovered_at')
     )
 
-    # Contatori fissi (non dipendono dal filtro) per i badge tab
-    total_found     = found_qs.count()
+    total_found         = found_qs.count()
     total_contacted     = found_qs.filter(status__in=CONTACTED_STATUSES).count()
     total_not_contacted = found_qs.exclude(status__in=CONTACTED_STATUSES).count()
 
@@ -440,7 +443,6 @@ def analyze_whatsapp_ajax(request, pk):
     try:
         store = get_object_or_404(Store, pk=pk)
 
-        # Skip se già analizzato (a meno che non sia force)
         force = request.GET.get('force') == '1'
         if store.whatsapp_analyzed_at is not None and not force:
             return JsonResponse({
