@@ -1,0 +1,397 @@
+{% extends 'base.html' %}
+{% block title %}Meta Ads Search — Shopify CRM{% endblock %}
+{% block page_title %}Ricerca store via Meta Ads{% endblock %}
+{% block nav_meta_ads %}active{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- ── Colonna sinistra: form ── -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-meta me-2"></i>Parametri ricerca
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+
+          <!-- Lista keyword salvata -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+              {{ form.keyword_list.label }}
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openKeywordModal()">
+                <i class="bi bi-pencil-square me-1"></i>Gestisci liste
+              </button>
+            </label>
+            {{ form.keyword_list }}
+          </div>
+
+          <div class="text-center text-muted small mb-3">— oppure —</div>
+
+          <!-- Keyword singola -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.keyword.label }}</label>
+            {{ form.keyword }}
+            {% if form.keyword.errors %}
+              <div class="text-danger small mt-1">{{ form.keyword.errors }}</div>
+            {% endif %}
+          </div>
+
+          <hr class="my-3">
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ form.country.label }}</label>
+              {{ form.country }}
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ form.limit.label }}</label>
+              {{ form.limit }}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.niche.label }}</label>
+            {{ form.niche }}
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ form.date_from.label }}</label>
+              {{ form.date_from }}
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">{{ form.date_to.label }}</label>
+              {{ form.date_to }}
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="form-check">
+              {{ form.shopify_only }}
+              <label class="form-check-label">{{ form.shopify_only.label }}</label>
+            </div>
+          </div>
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-2"></i>Avvia ricerca
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Colonna destra: run recenti ── -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-clock-history me-2"></i>Ricerche recenti
+      </div>
+
+      {% if recent_runs %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Keyword</th>
+              <th>Paese</th>
+              <th>Nicchia</th>
+              <th class="text-center">Nuovi</th>
+              <th class="text-center">Saltati</th>
+              <th class="text-center">Stato</th>
+              <th>Avviata</th>
+              <th>Durata</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in recent_runs %}
+            <tr>
+              <td class="fw-semibold">{{ run.keyword }}</td>
+              <td>{{ run.country }}</td>
+              <td>{{ run.get_niche_display }}</td>
+              <td class="text-center"><span class="badge bg-success">{{ run.stores_new }}</span></td>
+              <td class="text-center"><span class="badge bg-secondary">{{ run.stores_skipped }}</span></td>
+              <td class="text-center">
+                {% if run.status == 'completed' %}
+                  <span class="badge bg-success">Completato</span>
+                {% elif run.status == 'running' %}
+                  <span class="badge bg-warning text-dark">In corso</span>
+                {% else %}
+                  <span class="badge bg-danger">Errore</span>
+                {% endif %}
+              </td>
+              <td class="text-muted small">{{ run.started_at|date:"d/m/Y H:i" }}</td>
+              <td class="text-muted small">{{ run.duration }}</td>
+            </tr>
+            {% if run.status == 'error' and run.error_message %}
+            <tr class="table-danger">
+              <td colspan="8" class="small text-danger py-1 px-3">
+                <i class="bi bi-exclamation-triangle me-1"></i>{{ run.error_message }}
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-search fs-1 d-block mb-2 opacity-25"></i>
+        <p class="mb-0">Nessuna ricerca ancora effettuata.</p>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Modal Gestione Liste Keyword ── -->
+<div class="modal fade" id="keywordModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-list-ul me-2"></i>Gestione liste keyword</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-4">
+
+          <!-- Lista esistenti -->
+          <div class="col-lg-6">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="fw-semibold mb-0">Liste salvate</h6>
+              <button class="btn btn-sm btn-primary" onclick="newList()">
+                <i class="bi bi-plus me-1"></i>Nuova lista
+              </button>
+            </div>
+            <div id="kw-lists-container">
+              <div class="text-muted small text-center py-3">Caricamento...</div>
+            </div>
+          </div>
+
+          <!-- Form crea/modifica -->
+          <div class="col-lg-6">
+            <h6 class="fw-semibold mb-3" id="kw-form-title">Nuova lista</h6>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nome lista</label>
+              <input type="text" id="kw-name" class="form-control"
+                     placeholder="Es: Gioielli Italia, Moda Donna...">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold d-flex justify-content-between">
+                Keywords
+                <small class="text-muted fw-normal">una per riga</small>
+              </label>
+              <textarea id="kw-keywords" class="form-control font-monospace"
+                        rows="10"
+                        placeholder="gioielli artigianali&#10;collane d'oro&#10;bracciali argento&#10;..."></textarea>
+            </div>
+            <div class="mb-3">
+              <div class="form-check">
+                <input type="checkbox" id="kw-active" class="form-check-input" checked>
+                <label class="form-check-label" for="kw-active">Lista attiva</label>
+              </div>
+            </div>
+            <div id="kw-form-error" class="alert alert-danger py-2 d-none"></div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary flex-grow-1" onclick="saveList()">
+                <i class="bi bi-check-lg me-1"></i>Salva
+              </button>
+              <button class="btn btn-outline-secondary" onclick="newList()">
+                <i class="bi bi-x me-1"></i>Reset
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const URLS = {
+  list:   "{% url 'stores:meta_ads_keyword_lists' %}",
+  create: "{% url 'stores:meta_ads_keyword_list_create' %}",
+  update: (pk) => `/meta-ads/keyword-lists/${pk}/update/`,
+  delete: (pk) => `/meta-ads/keyword-lists/${pk}/delete/`,
+};
+
+let currentEditId = null;
+let allLists      = [];
+
+// ── Apri modal ────────────────────────────────────────────
+function openKeywordModal() {
+  loadLists();
+  new bootstrap.Modal(document.getElementById('keywordModal')).show();
+}
+
+// ── Carica liste ──────────────────────────────────────────
+async function loadLists() {
+  const container = document.getElementById('kw-lists-container');
+  try {
+    const res  = await fetch(URLS.list);
+    const data = await res.json();
+    allLists   = data.lists;
+    renderLists();
+  } catch(e) {
+    container.innerHTML = '<div class="text-danger small">Errore caricamento liste</div>';
+  }
+}
+
+// ── Render lista ──────────────────────────────────────────
+function renderLists() {
+  const container = document.getElementById('kw-lists-container');
+  if (!allLists.length) {
+    container.innerHTML = '<div class="text-muted small text-center py-3">Nessuna lista salvata.</div>';
+    return;
+  }
+  container.innerHTML = allLists.map(kl => `
+    <div class="border rounded p-3 mb-2 ${currentEditId === kl.id ? 'border-primary bg-light' : ''}">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-semibold">${escHtml(kl.name)}</div>
+          <div class="text-muted small">${kl.count} keyword${kl.count !== 1 ? 's' : ''}
+            ${kl.active ? '<span class="badge bg-success ms-1">Attiva</span>' : '<span class="badge bg-secondary ms-1">Inattiva</span>'}
+          </div>
+        </div>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-primary" onclick="editList(${kl.id})">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteList(${kl.id}, '${escHtml(kl.name)}')">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Nuova lista (reset form) ──────────────────────────────
+function newList() {
+  currentEditId = null;
+  document.getElementById('kw-form-title').textContent = 'Nuova lista';
+  document.getElementById('kw-name').value     = '';
+  document.getElementById('kw-keywords').value = '';
+  document.getElementById('kw-active').checked = true;
+  document.getElementById('kw-form-error').classList.add('d-none');
+  renderLists();
+}
+
+// ── Carica lista nel form ─────────────────────────────────
+function editList(id) {
+  const kl = allLists.find(k => k.id === id);
+  if (!kl) return;
+  currentEditId = id;
+  document.getElementById('kw-form-title').textContent = 'Modifica lista';
+  document.getElementById('kw-name').value     = kl.name;
+  document.getElementById('kw-keywords').value = kl.keywords;
+  document.getElementById('kw-active').checked = kl.active;
+  document.getElementById('kw-form-error').classList.add('d-none');
+  renderLists();
+}
+
+// ── Salva (crea o aggiorna) ───────────────────────────────
+async function saveList() {
+  const name     = document.getElementById('kw-name').value.trim();
+  const keywords = document.getElementById('kw-keywords').value.trim();
+  const active   = document.getElementById('kw-active').checked;
+  const errBox   = document.getElementById('kw-form-error');
+
+  errBox.classList.add('d-none');
+
+  const url    = currentEditId ? URLS.update(currentEditId) : URLS.create;
+  const method = 'POST';
+
+  try {
+    const res  = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken':  getCsrf(),
+      },
+      body: JSON.stringify({ name, keywords, active }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      await loadLists();
+      refreshMainSelect();
+      if (!currentEditId) newList();
+      else {
+        // Aggiorna titolo per conferma visiva
+        document.getElementById('kw-form-title').textContent = 'Modifica lista ✓';
+      }
+    } else {
+      errBox.textContent = data.error || 'Errore sconosciuto';
+      errBox.classList.remove('d-none');
+    }
+  } catch(e) {
+    errBox.textContent = 'Errore di rete';
+    errBox.classList.remove('d-none');
+  }
+}
+
+// ── Elimina ───────────────────────────────────────────────
+async function deleteList(id, name) {
+  if (!confirm(`Eliminare la lista "${name}"?`)) return;
+  try {
+    const res  = await fetch(URLS.delete(id), {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrf() },
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (currentEditId === id) newList();
+      await loadLists();
+      refreshMainSelect();
+    }
+  } catch(e) {
+    alert('Errore durante l\'eliminazione');
+  }
+}
+
+// ── Aggiorna select nel form principale ───────────────────
+async function refreshMainSelect() {
+  try {
+    const res  = await fetch(URLS.list);
+    const data = await res.json();
+    const sel  = document.getElementById('id_keyword_list');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— nessuna lista —</option>';
+    data.lists.forEach(kl => {
+      const opt = document.createElement('option');
+      opt.value       = kl.id;
+      opt.textContent = `${kl.name} (${kl.count} keywords)`;
+      if (String(kl.id) === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+// ── Utility ───────────────────────────────────────────────
+function getCsrf() {
+  return document.cookie.split(';')
+    .find(c => c.trim().startsWith('csrftoken='))
+    ?.split('=')[1] || '';
+}
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+{% endblock %}

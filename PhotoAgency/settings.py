@@ -97,3 +97,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Cartella report HTML generati dall'analyzer
 REPORTS_DIR = BASE_DIR / 'media' / 'reports'
+
+
+# ── Meta Ads ─────────────────────────────────────────────
+META_ADS_TOKEN = 'EAAXH8tJYpxcBRDcHCqie7oYORSFnZAJiWSepmhrwt1g16CGoRZAlFho8K0dbh9A4VY8Iuqr7Tewo0LRsokYNHjCisosrm2kXi7bqZCKVZBXvnq5RMnOuqor4PZCAkKQKWQKXVztmP9QZBPrFaQAmRZC6ORXKNShUdmEpToeviA4Lyy2GMTY7kjxw9OIgIY5'

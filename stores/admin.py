@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Store, StoreAnalysis, ContactLog, NicheQueryTemplate
+from .models import Store, StoreAnalysis, ContactLog, NicheQueryTemplate, MetaAdsRun,MetaAdsKeywordList
 
 
 @admin.register(Store)
@@ -67,3 +68,27 @@ class NicheQueryTemplateAdmin(admin.ModelAdmin):
     def query_count(self, obj):
         return len(obj.queries_list())
     query_count.short_description = 'N. Query'
+
+
+@admin.register(MetaAdsRun)
+class MetaAdsRunAdmin(admin.ModelAdmin):
+    list_display  = ['keyword', 'country', 'niche', 'status', 'ads_fetched',
+                     'stores_new', 'stores_skipped', 'started_at', 'duration']
+    list_filter   = ['status', 'country', 'niche', 'shopify_only', ]
+    search_fields = ['keyword']
+    readonly_fields = ['started_at', 'completed_at', 'ads_fetched', 'stores_checked',
+                       'stores_new', 'stores_skipped', 'error_message']
+    ordering      = ['-started_at']
+
+
+@admin.register(MetaAdsKeywordList)
+class MetaAdsKeywordListAdmin(admin.ModelAdmin):
+    list_display  = ['name', 'keywords_count', 'active', 'created_at']
+    list_filter   = ['active']
+    list_editable = ['active']
+    search_fields = ['name', 'keywords']
+    ordering      = ['name']
+
+    def keywords_count(self, obj):
+        return obj.keywords_count()
+    keywords_count.short_description = 'N. Keywords'

@@ -1,10 +1,10 @@
 import json
-import csv  
-
+import csv
 import subprocess
 import sys
 import os
 import re
+import threading
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render, redirect, get_object_or_404
@@ -15,10 +15,9 @@ from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import ImportStoresForm, SeleniumSearchForm
-from .services import import_stores_from_content
-from .models import Store, StoreAnalysis, NicheQueryTemplate, MessageTemplate
-
+from .forms import ImportStoresForm, SeleniumSearchForm, MetaAdsSearchForm
+from .models import Store, StoreAnalysis, NicheQueryTemplate, MessageTemplate, MetaAdsRun
+from .services import import_stores_from_content, run_meta_ads_thread
 
 # ─── Costante stati "contattato" ─────────────────────────────────────────────
 CONTACTED_STATUSES = ['contacted', 'replied', 'converted']
@@ -200,6 +199,7 @@ def store_list(request):
     niche  = request.GET.get('niche', '')
     email  = request.GET.get('email', '')
     sort   = request.GET.get('sort', '-discovered_at')
+    tags = request.GET.get('tags', '')
 
     if status:
         qs = qs.filter(status=status)
@@ -209,6 +209,8 @@ def store_list(request):
         qs = qs.exclude(email='')
     if email == 'no':
         qs = qs.filter(email='')
+    if tags:
+        qs = qs.filter(tags__icontains=tags)   
 
     allowed_sorts = {
         '-discovered_at': '-discovered_at',
@@ -244,6 +246,8 @@ def store_list(request):
         'filter_sort':      sort,
         'page_range_start': page_range_start,
         'page_range_end':   page_range_end,
+        'filter_tags': tags,
+
     })
 
 
@@ -572,3 +576,157 @@ def export_stores_csv(request):
         ])
 
     return response
+
+# ─── Meta Ads ────────────────────────────────────────────────────────────────
+
+def meta_ads_search(request):
+    if request.method == 'POST':
+        form = MetaAdsSearchForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+
+            # ── Costruisci lista keyword ──────────────────────
+            keywords = []
+            keyword_list_id = cd.get('keyword_list')
+            if keyword_list_id:
+                from .models import MetaAdsKeywordList
+                try:
+                    kl = MetaAdsKeywordList.objects.get(pk=keyword_list_id)
+                    keywords = kl.keywords_list()
+                except MetaAdsKeywordList.DoesNotExist:
+                    pass
+
+            if cd.get('keyword', '').strip():
+                kw = cd['keyword'].strip()
+                if kw not in keywords:
+                    keywords.append(kw)
+
+            # ── Crea il run ───────────────────────────────────
+            keyword_label = keywords[0] if len(keywords) == 1 else f"{keywords[0]} +{len(keywords)-1}"
+            run = MetaAdsRun.objects.create(
+                keyword      = keyword_label,
+                country      = cd['country'],
+                niche        = cd['niche'],
+                date_from    = cd.get('date_from'),
+                date_to      = cd.get('date_to'),
+                shopify_only = cd.get('shopify_only', True),
+                limit        = cd['limit'],
+            )
+
+            from analyzer import job_manager
+            job_id = job_manager.create_job(job_type='meta_ads', total=cd['limit'])
+
+            # Passa la lista completa al thread
+            params = dict(cd)
+            params['keywords'] = keywords
+
+            t = threading.Thread(
+                target=run_meta_ads_thread,
+                args=(run, params, job_id),
+                daemon=True,
+            )
+            t.start()
+
+            return redirect('analyzer:job_status', job_id=job_id)
+    else:
+        form = MetaAdsSearchForm()
+
+    recent_runs = MetaAdsRun.objects.order_by('-started_at')[:10]
+    return render(request, 'stores/meta_ads_search.html', {
+        'form':        form,
+        'recent_runs': recent_runs,
+    })
+
+# ─── Meta Ads Keyword Lists ──────────────────────────────────────────────────
+
+def meta_ads_keyword_lists(request):
+    from .models import MetaAdsKeywordList
+    lists = MetaAdsKeywordList.objects.all().order_by('name')
+    return JsonResponse({
+        'lists': [
+            {
+                'id':       kl.pk,
+                'name':     kl.name,
+                'keywords': kl.keywords,
+                'active':   kl.active,
+                'count':    kl.keywords_count(),
+            }
+            for kl in lists
+        ]
+    })
+
+
+@require_POST
+def meta_ads_keyword_list_create(request):
+    from .models import MetaAdsKeywordList
+    try:
+        data     = json.loads(request.body)
+        name     = data.get('name', '').strip()
+        keywords = data.get('keywords', '').strip()
+        active   = data.get('active', True)
+
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Nome obbligatorio'}, status=400)
+        if not keywords:
+            return JsonResponse({'ok': False, 'error': 'Inserisci almeno una keyword'}, status=400)
+
+        kl = MetaAdsKeywordList.objects.create(
+            name=name, keywords=keywords, active=active
+        )
+        return JsonResponse({
+            'ok': True,
+            'list': {
+                'id':       kl.pk,
+                'name':     kl.name,
+                'keywords': kl.keywords,
+                'active':   kl.active,
+                'count':    kl.keywords_count(),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+def meta_ads_keyword_list_update(request, pk):
+    from .models import MetaAdsKeywordList
+    kl = get_object_or_404(MetaAdsKeywordList, pk=pk)
+    try:
+        data     = json.loads(request.body)
+        name     = data.get('name', '').strip()
+        keywords = data.get('keywords', '').strip()
+        active   = data.get('active', True)
+
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Nome obbligatorio'}, status=400)
+        if not keywords:
+            return JsonResponse({'ok': False, 'error': 'Inserisci almeno una keyword'}, status=400)
+
+        kl.name     = name
+        kl.keywords = keywords
+        kl.active   = active
+        kl.save()
+
+        return JsonResponse({
+            'ok': True,
+            'list': {
+                'id':       kl.pk,
+                'name':     kl.name,
+                'keywords': kl.keywords,
+                'active':   kl.active,
+                'count':    kl.keywords_count(),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+def meta_ads_keyword_list_delete(request, pk):
+    from .models import MetaAdsKeywordList
+    kl = get_object_or_404(MetaAdsKeywordList, pk=pk)
+    try:
+        kl.delete()
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)

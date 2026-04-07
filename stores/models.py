@@ -223,3 +223,74 @@ class MessageTemplate(models.Model):
             MessageTemplate.objects.exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
         
+
+
+class MetaAdsRun(models.Model):
+
+    class Status(models.TextChoices):
+        RUNNING   = 'running',   'In corso'
+        COMPLETED = 'completed', 'Completato'
+        ERROR     = 'error',     'Errore'
+
+    # ── Input ────────────────────────────────────────────
+    keyword          = models.CharField(max_length=200, verbose_name='Keyword')
+    country          = models.CharField(max_length=10, default='IT', verbose_name='Paese')
+    niche            = models.CharField(max_length=50, choices=Store.Niche.choices,
+                                        default=Store.Niche.ALTRO, verbose_name='Nicchia')
+    date_from        = models.DateField(null=True, blank=True, verbose_name='Annunci dal')
+    date_to          = models.DateField(null=True, blank=True, verbose_name='Annunci fino al')
+    shopify_only     = models.BooleanField(default=True, verbose_name='Solo Shopify')
+    limit            = models.IntegerField(default=500, verbose_name='Max annunci')
+
+    # ── Output ───────────────────────────────────────────
+    status         = models.CharField(max_length=20, choices=Status.choices,
+                                      default=Status.RUNNING, verbose_name='Stato')
+    ads_fetched    = models.IntegerField(default=0, verbose_name='Annunci scaricati')
+    stores_checked = models.IntegerField(default=0, verbose_name='Store verificati')
+    stores_new     = models.IntegerField(default=0, verbose_name='Store nuovi')
+    stores_skipped = models.IntegerField(default=0, verbose_name='Store saltati (già in DB)')
+    error_message  = models.TextField(blank=True, verbose_name='Errore')
+
+    # ── Timestamp ────────────────────────────────────────
+    started_at   = models.DateTimeField(default=timezone.now, verbose_name='Avviato il')
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='Completato il')
+
+    class Meta:
+        verbose_name        = 'Ricerca Meta Ads'
+        verbose_name_plural = 'Ricerche Meta Ads'
+        ordering            = ['-started_at']
+
+    def __str__(self):
+        return f"{self.keyword} ({self.country}) — {self.started_at.strftime('%d/%m/%Y %H:%M')}"
+
+    @property
+    def duration(self):
+        if self.completed_at and self.started_at:
+            delta = self.completed_at - self.started_at
+            mins, secs = divmod(delta.seconds, 60)
+            return f"{mins}m {secs}s"
+        return '—'
+    
+class MetaAdsKeywordList(models.Model):
+    name     = models.CharField(max_length=200, verbose_name='Nome lista',
+                                 help_text='Es: Gioielli Italia, Moda Donna...')
+    keywords = models.TextField(
+        verbose_name='Keywords',
+        help_text='Una keyword per riga. Es: gioielli artigianali'
+    )
+    active   = models.BooleanField(default=True, verbose_name='Attiva')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name        = 'Lista Keyword Meta Ads'
+        verbose_name_plural = 'Liste Keyword Meta Ads'
+        ordering            = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def keywords_list(self) -> list[str]:
+        return [k.strip() for k in self.keywords.splitlines() if k.strip()]
+
+    def keywords_count(self) -> int:
+        return len(self.keywords_list())
