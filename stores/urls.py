@@ -26,10 +26,11 @@ urlpatterns = [
     path('export/csv/',   views.export_stores_csv,  name='export_csv'),
     #meta
     path('meta-ads/', views.meta_ads_search, name='meta_ads_search'),
+    path('stores/bulk-delete/', views.bulk_delete_stores, name='bulk_delete'),
     # ── Meta Ads Keyword Lists ───────────────────────────────────────────────────
-path('meta-ads/keyword-lists/',                views.meta_ads_keyword_lists,        name='meta_ads_keyword_lists'),
-path('meta-ads/keyword-lists/create/',         views.meta_ads_keyword_list_create,  name='meta_ads_keyword_list_create'),
-path('meta-ads/keyword-lists/<int:pk>/update/', views.meta_ads_keyword_list_update, name='meta_ads_keyword_list_update'),
-path('meta-ads/keyword-lists/<int:pk>/delete/', views.meta_ads_keyword_list_delete, name='meta_ads_keyword_list_delete'),
+    path('meta-ads/keyword-lists/',                views.meta_ads_keyword_lists,        name='meta_ads_keyword_lists'),
+    path('meta-ads/keyword-lists/create/',         views.meta_ads_keyword_list_create,  name='meta_ads_keyword_list_create'),
+    path('meta-ads/keyword-lists/<int:pk>/update/', views.meta_ads_keyword_list_update, name='meta_ads_keyword_list_update'),
+    path('meta-ads/keyword-lists/<int:pk>/delete/', views.meta_ads_keyword_list_delete, name='meta_ads_keyword_list_delete'),
 
 ]

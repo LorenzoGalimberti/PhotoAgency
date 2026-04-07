@@ -46,6 +46,122 @@
     background: #25d366; color: #fff;
   }
   .btn-wa-inline:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ══════════════════════════════════════════════════════════
+     GMAIL-STYLE SELECTION & BULK ACTION BAR
+     ══════════════════════════════════════════════════════════ */
+
+  /* Checkbox styling */
+  .store-cb {
+    width: 18px; height: 18px; cursor: pointer;
+    accent-color: #7c3aed;
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .store-cb:focus { outline: 2px solid #7c3aed44; outline-offset: 2px; }
+
+  /* Header checkbox area */
+  .cb-header {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* Row highlight when selected */
+  tr.row-selected {
+    background: #ede9fe !important;
+  }
+  tr.row-selected:hover {
+    background: #ddd6fe !important;
+  }
+
+  /* ── Bulk Action Bar (Gmail-style floating bar) ── */
+  #bulk-bar {
+    display: none;
+    position: sticky;
+    top: 56px; /* below topbar */
+    z-index: 40;
+    background: #1e1b2e;
+    border: 1px solid #4c4870;
+    border-radius: 10px;
+    padding: 10px 20px;
+    margin-bottom: 16px;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    animation: barSlideIn .2s ease-out;
+  }
+  #bulk-bar.show { display: flex; }
+
+  @keyframes barSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  #bulk-bar .bar-count {
+    color: #fff; font-size: 13px; font-weight: 700;
+    white-space: nowrap;
+  }
+  #bulk-bar .bar-count span {
+    color: #a78bfa; font-size: 15px;
+  }
+
+  #bulk-bar .bar-actions {
+    display: flex; gap: 8px; flex: 1;
+  }
+
+  #bulk-bar .bar-btn {
+    padding: 6px 16px; border-radius: 6px; font-size: 12px;
+    font-weight: 600; cursor: pointer; border: none;
+    transition: all .15s; white-space: nowrap;
+  }
+  #bulk-bar .bar-btn-danger {
+    background: #ef4444; color: #fff;
+  }
+  #bulk-bar .bar-btn-danger:hover { background: #dc2626; }
+
+  #bulk-bar .bar-btn-ghost {
+    background: transparent; color: #a78bfa; border: 1px solid #4c4870;
+  }
+  #bulk-bar .bar-btn-ghost:hover { background: #2d2840; color: #c4b5fd; }
+
+  #bulk-bar .bar-close {
+    background: none; border: none; color: #6b7280; cursor: pointer;
+    font-size: 18px; padding: 0 4px; line-height: 1;
+    transition: color .15s;
+  }
+  #bulk-bar .bar-close:hover { color: #fff; }
+
+  /* ── Select-all page banner ── */
+  #select-all-banner {
+    display: none;
+    background: #faf5ff;
+    border: 1px solid #e9d5ff;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #6b21a8;
+    text-align: center;
+  }
+  #select-all-banner a {
+    color: #7c3aed; font-weight: 700; cursor: pointer;
+    text-decoration: underline;
+  }
+  #select-all-banner a:hover { color: #5b21b6; }
+
+  /* ── Toast notification ── */
+  #delete-toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: #1e1b2e; color: #fff; padding: 12px 24px;
+    border-radius: 10px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 20px rgba(0,0,0,.3);
+    z-index: 9999;
+    display: none;
+    animation: toastIn .3s ease-out;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
 </style>
 {% endblock %}
 
@@ -133,6 +249,30 @@
   </a>
 </div>
 
+<!-- ═══════════════════════════════════════════
+     BULK ACTION BAR (Gmail-style)
+     ═══════════════════════════════════════════ -->
+<div id="bulk-bar">
+  <div class="bar-count">
+    <span id="bar-count-num">0</span> selezionati
+  </div>
+  <div class="bar-actions">
+    <button class="bar-btn bar-btn-danger" id="btn-bulk-delete" onclick="bulkDelete()">
+      <i class="bi bi-trash3 me-1"></i>Elimina
+    </button>
+    <button class="bar-btn bar-btn-ghost" id="btn-bulk-deselect" onclick="deselectAll()">
+      <i class="bi bi-x-lg me-1"></i>Deseleziona
+    </button>
+  </div>
+  <button class="bar-close" onclick="deselectAll()" title="Chiudi">&times;</button>
+</div>
+
+<!-- Select-all-across-pages banner -->
+<div id="select-all-banner">
+  Tutti i <strong id="sab-page-count">0</strong> store di questa pagina sono selezionati.
+  <a id="sab-select-all" onclick="selectAllFiltered()">Seleziona tutti i {{ stores.paginator.count }} store</a>
+</div>
+
 <!-- Tabella -->
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
@@ -149,7 +289,6 @@
         <i class="bi bi-whatsapp me-1"></i>WhatsApp
       </a>
 
-      <!-- ✅ NUOVO: Export CSV rispetta i filtri attivi -->
       <a href="{% url 'stores:export_csv' %}?status={{ filter_status }}&niche={{ filter_niche }}&email={{ filter_email }}"
          class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-download me-1"></i>Export CSV
@@ -163,10 +302,16 @@
 
   {% if stores %}
   <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0">
+    <table class="table table-hover align-middle mb-0" id="store-table">
       <thead class="table-light">
         <tr>
-          <th class="ps-3">Store</th>
+          <th style="width:40px" class="ps-3">
+            <div class="cb-header">
+              <input type="checkbox" class="store-cb" id="cb-select-all"
+                     title="Seleziona tutti in questa pagina">
+            </div>
+          </th>
+          <th>Store</th>
           <th>Nicchia</th>
           <th>Status</th>
           <th>Email</th>
@@ -178,8 +323,11 @@
       </thead>
       <tbody>
         {% for store in stores %}
-        <tr>
+        <tr data-pk="{{ store.pk }}" class="store-row">
           <td class="ps-3">
+            <input type="checkbox" class="store-cb row-cb" value="{{ store.pk }}">
+          </td>
+          <td>
             <div class="fw-semibold" style="font-size:13px">{{ store.name|default:store.domain }}</div>
             <small class="text-muted">{{ store.url }}</small>
           </td>
@@ -191,36 +339,27 @@
           </td>
           <td>
             {% if store.email %}
-              <small class="text-success"><i class="bi bi-check-circle me-1"></i>{{ store.email }}</small>
+              <small class="text-success"><i class="bi bi-envelope-check me-1"></i>{{ store.email|truncatechars:22 }}</small>
             {% else %}
               <small class="text-muted">—</small>
             {% endif %}
           </td>
-
-          <!-- ── Colonna WhatsApp ── -->
-          <td id="wa-cell-{{ store.pk }}">
+          <td>
             {% if store.whatsapp_url %}
-              <a href="{{ store.whatsapp_url }}" target="_blank"
-                 class="text-success text-decoration-none" style="font-size:12px">
-                <i class="bi bi-whatsapp me-1"></i>{{ store.whatsapp_url|cut:"https://wa.me/" }}
+              <a href="{{ store.whatsapp_url }}" target="_blank" class="btn-wa-inline" title="{{ store.whatsapp_url }}">
+                <i class="bi bi-whatsapp me-1"></i>Apri
               </a>
-            {% elif store.whatsapp_analyzed_at %}
-              <small class="text-muted">❌ Nessun widget</small>
             {% else %}
-              <button class="btn-wa-inline"
-                      id="wa-btn-{{ store.pk }}"
-                      onclick="analyzeWA({{ store.pk }}, this)">
-                <i class="bi bi-whatsapp"></i> Analizza
-              </button>
+              <small class="text-muted">—</small>
             {% endif %}
           </td>
-
           <td>
-            {% with score=store.lead_score %}
-              {% if score is not None %}
-                <span class="fw-bold {% if score >= 70 %}text-danger{% elif score >= 50 %}text-warning{% else %}text-secondary{% endif %}">
-                  {{ score }}/100
+            {% with latest=store.analyses.first %}
+              {% if latest %}
+                <span class="fw-bold {% if latest.lead_score >= 70 %}text-danger{% elif latest.lead_score >= 50 %}text-warning{% else %}text-secondary{% endif %}">
+                  {{ latest.lead_score }}/100
                 </span>
+                <small class="text-muted ms-1">{{ latest.lead_priority }}</small>
               {% else %}
                 <small class="text-muted">—</small>
               {% endif %}
@@ -279,10 +418,239 @@
   {% endif %}
 </div>
 
+<!-- Toast notification -->
+<div id="delete-toast"></div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// ══════════════════════════════════════════════════════════
+// GMAIL-STYLE SELECTION SYSTEM
+// ══════════════════════════════════════════════════════════
+
+const CSRF = '{{ csrf_token }}';
+const TOTAL_FILTERED = {{ stores.paginator.count }};
+
+// State
+let lastCheckedIndex = null;
+let selectAllFilteredMode = false;
+
+// DOM refs
+const cbAll       = document.getElementById('cb-select-all');
+const bulkBar     = document.getElementById('bulk-bar');
+const barCountNum = document.getElementById('bar-count-num');
+const sabBanner   = document.getElementById('select-all-banner');
+const sabPageCnt  = document.getElementById('sab-page-count');
+const toast       = document.getElementById('delete-toast');
+
+function getAllRowCbs() {
+  return Array.from(document.querySelectorAll('.row-cb'));
+}
+
+function getCheckedPks() {
+  return getAllRowCbs().filter(cb => cb.checked).map(cb => parseInt(cb.value));
+}
+
+function getCheckedCount() {
+  if (selectAllFilteredMode) return TOTAL_FILTERED;
+  return getCheckedPks().length;
+}
+
+// ── Update UI based on selection state ──
+function updateSelectionUI() {
+  const cbs     = getAllRowCbs();
+  const checked = cbs.filter(cb => cb.checked);
+  const count   = selectAllFilteredMode ? TOTAL_FILTERED : checked.length;
+
+  // Bulk bar
+  if (count > 0) {
+    bulkBar.classList.add('show');
+    barCountNum.textContent = count;
+  } else {
+    bulkBar.classList.remove('show');
+    selectAllFilteredMode = false;
+  }
+
+  // Header checkbox state
+  if (checked.length === 0) {
+    cbAll.checked       = false;
+    cbAll.indeterminate = false;
+  } else if (checked.length === cbs.length) {
+    cbAll.checked       = true;
+    cbAll.indeterminate = false;
+  } else {
+    cbAll.checked       = false;
+    cbAll.indeterminate = true;
+  }
+
+  // Row highlight
+  cbs.forEach(cb => {
+    cb.closest('tr').classList.toggle('row-selected', cb.checked);
+  });
+
+  // "Select all across pages" banner
+  if (checked.length === cbs.length && cbs.length > 0 && TOTAL_FILTERED > cbs.length && !selectAllFilteredMode) {
+    sabPageCnt.textContent = cbs.length;
+    sabBanner.style.display = 'block';
+  } else {
+    sabBanner.style.display = 'none';
+  }
+}
+
+// ── Header checkbox: toggle all on page ──
+cbAll.addEventListener('change', function() {
+  const cbs = getAllRowCbs();
+  cbs.forEach(cb => cb.checked = this.checked);
+  selectAllFilteredMode = false;
+  lastCheckedIndex = null;
+  updateSelectionUI();
+});
+
+// ── Row checkbox click with Shift support ──
+document.addEventListener('click', function(e) {
+  const cb = e.target.closest('.row-cb');
+  if (!cb) return;
+
+  const cbs   = getAllRowCbs();
+  const index = cbs.indexOf(cb);
+
+  // Shift+click → range select (Gmail-style)
+  if (e.shiftKey && lastCheckedIndex !== null && lastCheckedIndex !== index) {
+    const start = Math.min(lastCheckedIndex, index);
+    const end   = Math.max(lastCheckedIndex, index);
+    const state = cb.checked; // the checkbox already toggled
+
+    for (let i = start; i <= end; i++) {
+      cbs[i].checked = state;
+    }
+  }
+
+  lastCheckedIndex = index;
+  selectAllFilteredMode = false;
+  updateSelectionUI();
+});
+
+// ── Select all across all filtered pages ──
+function selectAllFiltered() {
+  const cbs = getAllRowCbs();
+  cbs.forEach(cb => cb.checked = true);
+  selectAllFilteredMode = true;
+  updateSelectionUI();
+  sabBanner.innerHTML = `<i class="bi bi-check-circle me-1"></i>Tutti i <strong>${TOTAL_FILTERED}</strong> store (tutte le pagine) sono selezionati. <a onclick="deselectAll()">Annulla</a>`;
+}
+
+// ── Deselect all ──
+function deselectAll() {
+  const cbs = getAllRowCbs();
+  cbs.forEach(cb => cb.checked = false);
+  cbAll.checked       = false;
+  cbAll.indeterminate = false;
+  selectAllFilteredMode = false;
+  lastCheckedIndex = null;
+  updateSelectionUI();
+}
+
+// ── Show toast ──
+function showToast(msg, duration = 3000) {
+  toast.textContent    = msg;
+  toast.style.display  = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, duration);
+}
+
+// ── Bulk Delete ──
+async function bulkDelete() {
+  const count = getCheckedCount();
+  if (count === 0) return;
+
+  const confirmMsg = count === 1
+    ? 'Eliminare questo store?'
+    : `Eliminare ${count} store?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const btn = document.getElementById('btn-bulk-delete');
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Eliminazione...';
+
+  try {
+    const body = {
+      select_all_filtered: selectAllFilteredMode,
+      // Passa i filtri correnti per "select all filtered"
+      filter_status: '{{ filter_status }}',
+      filter_niche:  '{{ filter_niche }}',
+      filter_email:  '{{ filter_email }}',
+    };
+
+    if (!selectAllFilteredMode) {
+      body.store_ids = getCheckedPks();
+    }
+
+    const res = await fetch('{% url "stores:bulk_delete" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showToast(`${data.deleted} store eliminati`, 3000);
+
+      if (selectAllFilteredMode) {
+        // Reload page since we deleted across pages
+        setTimeout(() => location.reload(), 800);
+      } else {
+        // Remove rows with animation
+        const pks = getCheckedPks();
+        // (pks might be empty now since we already read them, use data.deleted_ids)
+        document.querySelectorAll('.store-row').forEach(row => {
+          const pk = parseInt(row.dataset.pk);
+          if (data.deleted_ids && data.deleted_ids.includes(pk)) {
+            row.style.transition = 'opacity .3s, transform .3s';
+            row.style.opacity    = '0';
+            row.style.transform  = 'translateX(-20px)';
+            setTimeout(() => row.remove(), 300);
+          }
+        });
+
+        deselectAll();
+
+        // Reload after a moment to refresh counts
+        setTimeout(() => location.reload(), 1500);
+      }
+    } else {
+      alert('Errore: ' + (data.error || 'Sconosciuto'));
+    }
+  } catch (err) {
+    alert('Errore di rete: ' + err.message);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-trash3 me-1"></i>Elimina';
+  }
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', function(e) {
+  // Escape → deselect all
+  if (e.key === 'Escape' && getCheckedCount() > 0) {
+    e.preventDefault();
+    deselectAll();
+  }
+  // Delete/Backspace → bulk delete (if selection active and not in input)
+  if ((e.key === 'Delete' || e.key === 'Backspace') && getCheckedCount() > 0) {
+    const tag = document.activeElement.tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+      e.preventDefault();
+      bulkDelete();
+    }
+  }
+});
+
+
 // ══════════════════════════════════════════════════════════
 // POLLING JOB ANALISI ATTIVO
 // ══════════════════════════════════════════════════════════
@@ -316,54 +684,20 @@ async function checkJob() {
         banSub.textContent   = data.current_name ? `⟳ Sto analizzando: ${data.current_name}` : 'Inizializzazione...';
       } else {
         banTitle.textContent = 'Analisi store in corso...';
-        banSub.textContent   = data.current_name ? `⟳ ${data.current_name}` : 'Avvio analisi...';
+        banSub.textContent   = data.current_name ? `⟳ ${data.current_name}` : '...';
       }
     } else {
       stopPolling();
+      if (data.status === 'completed') location.reload();
     }
-  } catch (e) {}
+  } catch {
+    stopPolling();
+  }
 }
 
 if (activeJobId) {
   checkJob();
   pollTimer = setInterval(checkJob, 3000);
-}
-
-// ══════════════════════════════════════════════════════════
-// ANALISI WHATSAPP INLINE
-// ══════════════════════════════════════════════════════════
-const WA_CSRF = '{{ csrf_token }}';
-
-async function analyzeWA(pk, btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> ...';
-
-  try {
-    const res  = await fetch(`/stores/${pk}/whatsapp-analyze/`, {
-      method:  'POST',
-      headers: { 'X-CSRFToken': WA_CSRF },
-    });
-    const data = await res.json();
-    const cell = document.getElementById('wa-cell-' + pk);
-
-    if (data.status === 'found') {
-      cell.innerHTML = `
-        <a href="${data.whatsapp_url}" target="_blank"
-           class="text-success text-decoration-none" style="font-size:12px">
-          <i class="bi bi-whatsapp me-1"></i>${data.number}
-        </a>`;
-    } else if (data.status === 'not_found') {
-      cell.innerHTML = `<small class="text-muted">❌ Nessun widget</small>`;
-    } else if (data.status === 'skipped') {
-      cell.innerHTML = `<small class="text-muted">✓ Già analizzato</small>`;
-    } else {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-whatsapp"></i> Riprova';
-    }
-  } catch (e) {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-whatsapp"></i> Analizza';
-  }
 }
 </script>
 {% endblock %}
