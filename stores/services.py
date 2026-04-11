@@ -637,7 +637,20 @@ def run_meta_ads_thread(run: MetaAdsRun, params: dict, job_id: str):
             run.save(update_fields=['status', 'completed_at'])
             job_manager.complete_job(job_id)
             return
-
+        # ── 3.5 DEDUP FINALE (rete di sicurezza) ─────────────
+        seen_domains = set()
+        unique_stores = []
+        dupes_removed = 0
+        for s in all_stores_raw:
+            d = s.get("domain", "")
+            if d and d not in seen_domains:
+                seen_domains.add(d)
+                unique_stores.append(s)
+            else:
+                dupes_removed += 1
+        if dupes_removed:
+            log(f"🧹 Rimossi {dupes_removed} duplicati residui")
+        all_stores_raw = unique_stores
         # ── 4. Check in parallelo ─────────────────────────────
         shopify_only = params.get('shopify_only', True)
         check_label  = "Shopify" if shopify_only else "e-commerce"

@@ -1,6 +1,8 @@
 """
 Management command: export_whatsapp_excel
 Uso: python manage.py export_whatsapp_excel [--output percorso.xlsx] [--solo-non-contattati]
+Uso: python manage.py export_whatsapp_excel --solo-non-contattati
+
 """
 
 import re

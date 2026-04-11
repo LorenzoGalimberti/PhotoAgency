@@ -320,6 +320,35 @@ def change_status(request, pk):
     return redirect('stores:store_detail', pk=pk)
 
 
+@require_POST
+def bulk_change_status(request):
+    """
+    Cambia lo status di più store in una volta sola (bulk).
+    Riceve JSON: { "store_ids": [1, 2, 3], "status": "contacted" }
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'JSON non valido'}, status=400)
+
+    store_ids  = data.get('store_ids', [])
+    new_status = data.get('status', '')
+
+    if not store_ids:
+        return JsonResponse({'ok': False, 'error': 'Nessuno store selezionato'}, status=400)
+
+    if new_status not in dict(Store.Status.choices):
+        return JsonResponse({'ok': False, 'error': 'Stato non valido'}, status=400)
+
+    updated = Store.objects.filter(pk__in=store_ids).update(status=new_status)
+
+    return JsonResponse({
+        'ok':      True,
+        'updated': updated,
+        'status':  new_status,
+    })
+
+
 # ─── CRUD MessageTemplate ────────────────────────────────────────────────────
 
 def message_templates(request):
@@ -730,39 +759,26 @@ def meta_ads_keyword_list_delete(request, pk):
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)
-    
-import json
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse
- 
+
+
 @require_POST
 def bulk_delete_stores(request):
     """
     Elimina store in bulk (singolo, multiplo, o tutti i filtrati).
-    Accetta JSON:
-    {
-      "store_ids": [1, 2, 3],              // lista PK (se non select_all_filtered)
-      "select_all_filtered": false,         // true = elimina TUTTI i filtrati
-      "filter_status": "",                  // filtri attivi (per select_all_filtered)
-      "filter_niche": "",
-      "filter_email": "",
-    }
     """
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'success': False, 'error': 'JSON non valido'}, status=400)
- 
+
     select_all = data.get('select_all_filtered', False)
- 
+
     if select_all:
-        # Elimina tutti gli store che corrispondono ai filtri attivi
         qs = Store.objects.all()
         status = data.get('filter_status', '')
         niche  = data.get('filter_niche', '')
         email  = data.get('filter_email', '')
- 
+
         if status:
             qs = qs.filter(status=status)
         if niche:
@@ -771,32 +787,30 @@ def bulk_delete_stores(request):
             qs = qs.exclude(email='')
         if email == 'no':
             qs = qs.filter(email='')
- 
+
         deleted_ids = list(qs.values_list('pk', flat=True))
         count, _ = qs.delete()
- 
+
         return JsonResponse({
             'success': True,
             'deleted': count,
             'deleted_ids': deleted_ids,
         })
- 
+
     else:
-        # Elimina solo gli ID specificati
         store_ids = data.get('store_ids', [])
- 
+
         if not store_ids:
             return JsonResponse({'success': False, 'error': 'Nessuno store selezionato'}, status=400)
- 
-        # Validazione: solo interi
+
         try:
             store_ids = [int(pk) for pk in store_ids]
         except (ValueError, TypeError):
             return JsonResponse({'success': False, 'error': 'ID non validi'}, status=400)
- 
+
         qs = Store.objects.filter(pk__in=store_ids)
         count, _ = qs.delete()
- 
+
         return JsonResponse({
             'success': True,
             'deleted': count,

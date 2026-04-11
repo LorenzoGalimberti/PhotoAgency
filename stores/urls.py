@@ -13,8 +13,9 @@ urlpatterns = [
     path('stores/whatsapp/', views.whatsapp_list, name='whatsapp_list'),
     path('stores/<int:pk>/whatsapp-analyze/', views.analyze_whatsapp_ajax, name='analyze_whatsapp_ajax'),
 
-
-
+    # ── Bulk actions ─────────────────────────────────────────────────────────
+    path('stores/bulk-delete/', views.bulk_delete_stores, name='bulk_delete'),
+    path('stores/bulk-change-status/', views.bulk_change_status, name='bulk_change_status'),
 
     # ── Configurazione messaggi ──────────────────────────────────────────────
     path('settings/messages/', views.message_templates, name='message_templates'),
@@ -24,13 +25,13 @@ urlpatterns = [
     path('settings/messages/<int:pk>/set-default/', views.message_template_set_default, name='message_template_set_default'),
     path('export/urls/',  views.export_stores_urls, name='export_urls'),
     path('export/csv/',   views.export_stores_csv,  name='export_csv'),
-    #meta
+
+    # ── Meta Ads ─────────────────────────────────────────────────────────────
     path('meta-ads/', views.meta_ads_search, name='meta_ads_search'),
-    path('stores/bulk-delete/', views.bulk_delete_stores, name='bulk_delete'),
-    # ── Meta Ads Keyword Lists ───────────────────────────────────────────────────
+
+    # ── Meta Ads Keyword Lists ───────────────────────────────────────────────
     path('meta-ads/keyword-lists/',                views.meta_ads_keyword_lists,        name='meta_ads_keyword_lists'),
     path('meta-ads/keyword-lists/create/',         views.meta_ads_keyword_list_create,  name='meta_ads_keyword_list_create'),
     path('meta-ads/keyword-lists/<int:pk>/update/', views.meta_ads_keyword_list_update, name='meta_ads_keyword_list_update'),
     path('meta-ads/keyword-lists/<int:pk>/delete/', views.meta_ads_keyword_list_delete, name='meta_ads_keyword_list_delete'),
-
 ]

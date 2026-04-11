@@ -111,18 +111,6 @@
   .wa-filter-btn.f-yes.active  { background: #16a34a; border-color: #16a34a; color: #fff; }
   .wa-filter-btn.f-no.active   { background: #dc2626; border-color: #dc2626; color: #fff; }
 
-  /* ── Pulsante toggle contattato ── */
-  .btn-toggle-contact {
-    font-size: 11px; padding: 3px 10px; border-radius: 6px;
-    border: 1px solid #d1d5db; color: #6b7280; background: transparent;
-    cursor: pointer; transition: all .15s; white-space: nowrap; display: block;
-    margin-top: 4px;
-  }
-  .btn-toggle-contact:hover:not(:disabled) { border-color: #16a34a; color: #16a34a; }
-  .btn-toggle-contact.is-contacted         { border-color: #16a34a; color: #15803d; background: #f0fdf4; }
-  .btn-toggle-contact.is-contacted:hover:not(:disabled) { border-color: #dc2626; color: #dc2626; background: #fff; }
-  .btn-toggle-contact:disabled             { opacity: .45; cursor: not-allowed; }
-
   /* ── Riga evidenziata se contattata ── */
   tr.row-contacted { background: #f0fdf4 !important; }
 
@@ -140,6 +128,86 @@
     padding: 48px 24px; text-align: center; color: #9ca3af;
   }
   .empty-state i { font-size: 48px; opacity: .2; display: block; margin-bottom: 12px; }
+
+  /* ══════════════════════════════════════════
+     CHECKBOX + BULK BAR (Gmail-style)
+     ══════════════════════════════════════════ */
+  .wa-row-cb {
+    width: 16px; height: 16px; cursor: pointer;
+    accent-color: #25d366; margin: 0; flex-shrink: 0;
+  }
+  .wa-row-cb:focus { outline: 2px solid #25d36644; outline-offset: 2px; }
+
+  tr.row-selected { background: #ecfdf5 !important; }
+  tr.row-selected:hover { background: #dcfce7 !important; }
+
+  #wa-selection-bar {
+    display: none;
+    position: sticky;
+    top: 56px;
+    z-index: 40;
+    background: #064e3b;
+    border: 1px solid #059669;
+    border-radius: 10px;
+    padding: 10px 20px;
+    margin-bottom: 16px;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    animation: selBarSlideIn .2s ease-out;
+  }
+  #wa-selection-bar.show { display: flex; }
+
+  @keyframes selBarSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  #wa-selection-bar .bar-count {
+    color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap;
+  }
+  #wa-selection-bar .bar-count span { color: #6ee7b7; font-size: 15px; }
+
+  #wa-selection-bar .bar-actions { display: flex; gap: 8px; flex: 1; }
+
+  #wa-selection-bar .bar-btn {
+    padding: 6px 16px; border-radius: 6px; font-size: 12px;
+    font-weight: 600; cursor: pointer; border: none;
+    transition: all .15s; white-space: nowrap;
+  }
+  #wa-selection-bar .bar-btn-contacted {
+    background: #16a34a; color: #fff;
+  }
+  #wa-selection-bar .bar-btn-contacted:hover { background: #15803d; }
+
+  #wa-selection-bar .bar-btn-uncontacted {
+    background: #f59e0b; color: #fff;
+  }
+  #wa-selection-bar .bar-btn-uncontacted:hover { background: #d97706; }
+
+  #wa-selection-bar .bar-btn-ghost {
+    background: transparent; color: #6ee7b7; border: 1px solid #059669;
+  }
+  #wa-selection-bar .bar-btn-ghost:hover { background: #065f46; color: #a7f3d0; }
+
+  #wa-selection-bar .bar-close {
+    background: none; border: none; color: #6ee7b7; cursor: pointer;
+    font-size: 18px; padding: 0 4px; line-height: 1; transition: color .15s;
+  }
+  #wa-selection-bar .bar-close:hover { color: #fff; }
+
+  /* ── Toast ── */
+  #wa-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e1b2e; color: #fff; padding: 12px 24px; border-radius: 10px;
+    font-size: 13px; font-weight: 600; z-index: 999; display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,.3);
+    animation: toastIn .3s ease-out;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
 </style>
 {% endblock %}
 
@@ -173,67 +241,54 @@
   </div>
 </div>
 
-<!-- ── Stats ── -->
+<!-- ══════ Stats ══════ -->
 <div class="wa-stats">
   <div class="wa-stat">
     <div class="wa-stat-num" style="color:#25d366">{{ total_found }}</div>
-    <div class="wa-stat-lbl">✅ Trovati</div>
+    <div class="wa-stat-lbl">Con WhatsApp</div>
   </div>
   <div class="wa-stat">
     <div class="wa-stat-num" style="color:#16a34a">{{ total_contacted }}</div>
-    <div class="wa-stat-lbl">📨 Contattati</div>
+    <div class="wa-stat-lbl">Contattati</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-num" style="color:#dc2626">{{ total_not_contacted }}</div>
+    <div class="wa-stat-lbl">Non contattati</div>
   </div>
   <div class="wa-stat">
     <div class="wa-stat-num" style="color:#ef4444">{{ total_not_found }}</div>
-    <div class="wa-stat-lbl">❌ Non trovati</div>
+    <div class="wa-stat-lbl">Senza WhatsApp</div>
   </div>
   <div class="wa-stat">
     <div class="wa-stat-num" style="color:#7c3aed">{{ total_pending }}</div>
-    <div class="wa-stat-lbl">⏳ Pending</div>
-  </div>
-  <div class="wa-stat">
-    <div class="wa-stat-num">{{ total_found|add:total_not_found }}</div>
-    <div class="wa-stat-lbl">Totale analizzati</div>
+    <div class="wa-stat-lbl">Da analizzare</div>
   </div>
 </div>
 
-<!-- ── Bottone analizza tutti ── -->
-{% if total_pending > 0 %}
-<div class="d-flex gap-3 align-items-center mb-4">
-  <button class="btn btn-success btn-sm" id="btn-analyze-all-wa"
-          onclick="analyzeAllPending()">
-    <i class="bi bi-whatsapp me-1"></i>
-    Analizza tutti i pending ({{ total_pending }})
-  </button>
-  <small class="text-muted">Tempo stimato: ~{{ total_pending }} store × ~20s</small>
-</div>
-{% endif %}
-
-<!-- ── Tabs ── -->
+<!-- ══════ Tabs ══════ -->
 <div class="wa-tabs">
-  <button class="wa-tab tab-found active" onclick="showTab('found', this)">
-    ✅ Trovati
-    <span class="badge bg-success bg-opacity-75 ms-1">{{ total_found }}</span>
-  </button>
-  <button class="wa-tab tab-nf" onclick="showTab('notfound', this)">
-    ❌ Non trovati
-    <span class="badge bg-danger bg-opacity-75 ms-1">{{ total_not_found }}</span>
-  </button>
-  <button class="wa-tab tab-pend" onclick="showTab('pending', this)">
-    ⏳ Pending
-    <span class="badge ms-1" style="background:#7c3aed">{{ total_pending }}</span>
-  </button>
+  <div class="wa-tab tab-found active" onclick="showTab('found', this)">
+    <i class="bi bi-whatsapp me-1"></i>Trovati
+    <span class="ms-1 opacity-75">{{ total_found }}</span>
+  </div>
+  <div class="wa-tab tab-nf" onclick="showTab('notfound', this)">
+    <i class="bi bi-x-circle me-1"></i>Non trovati
+    <span class="ms-1 opacity-75">{{ total_not_found }}</span>
+  </div>
+  <div class="wa-tab tab-pend" onclick="showTab('pending', this)">
+    <i class="bi bi-hourglass-split me-1"></i>In attesa
+    <span class="ms-1 opacity-75">{{ total_pending }}</span>
+  </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     TAB: TROVATI
-════════════════════════════════════════════ -->
-<div class="wa-panel active" id="panel-found">
+<!-- ══════════════════════════════════════════════════
+     PANEL: TROVATI (con checkbox + bulk bar)
+     ══════════════════════════════════════════════════ -->
+<div id="panel-found" class="wa-panel active">
 
-  <!-- ── Filtro contattati ── -->
+  <!-- Filtri contattati -->
   <div class="wa-filter-bar">
-    <span style="font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap">Filtra contattati:</span>
-    <a href="?" class="wa-filter-btn f-all {% if not contacted_filter %}active{% endif %}">
+    <a href="?contacted=" class="wa-filter-btn f-all {% if not contacted_filter %}active{% endif %}">
       Tutti
       <span class="ms-1 opacity-75">{{ total_found }}</span>
     </a>
@@ -245,6 +300,25 @@
       ✅ Contattati
       <span class="ms-1 opacity-75">{{ total_contacted }}</span>
     </a>
+  </div>
+
+  <!-- ═══ BULK SELECTION BAR ═══ -->
+  <div id="wa-selection-bar">
+    <div class="bar-count">
+      <span id="wa-bar-count-num">0</span> selezionati
+    </div>
+    <div class="bar-actions">
+      <button class="bar-btn bar-btn-contacted" onclick="bulkSetStatus('contacted')">
+        <i class="bi bi-check-lg me-1"></i>Segna contattati
+      </button>
+      <button class="bar-btn bar-btn-uncontacted" onclick="bulkSetStatus('analyzed')">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Segna non contattati
+      </button>
+      <button class="bar-btn bar-btn-ghost" onclick="waDeselectAll()">
+        <i class="bi bi-x-lg me-1"></i>Deseleziona
+      </button>
+    </div>
+    <button class="bar-close" onclick="waDeselectAll()" title="Chiudi">&times;</button>
   </div>
 
   <div class="card border-0 shadow-sm">
@@ -268,11 +342,15 @@
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th class="ps-3">Store</th>
+            <th style="width:40px" class="ps-3">
+              <input type="checkbox" class="wa-row-cb" id="wa-cb-all"
+                     onchange="waToggleAll(this.checked)">
+            </th>
+            <th>Store</th>
             <th>Nicchia</th>
             <th>Numero</th>
             <th>Contatto diretto</th>
-            <th>Contattato</th>
+            <th>Stato</th>
             <th>Analizzato il</th>
             <th></th>
           </tr>
@@ -280,8 +358,16 @@
         <tbody>
           {% for store in found %}
           <tr id="row-{{ store.pk }}"
-              class="{% if store.status == 'contacted' or store.status == 'replied' or store.status == 'converted' %}row-contacted{% endif %}">
+              data-pk="{{ store.pk }}"
+              class="wa-selectable-row {% if store.status == 'contacted' or store.status == 'replied' or store.status == 'converted' %}row-contacted{% endif %}">
+
+            <!-- Checkbox -->
             <td class="ps-3">
+              <input type="checkbox" class="wa-row-cb" value="{{ store.pk }}"
+                     onchange="waUpdateSelection()">
+            </td>
+
+            <td>
               <div class="fw-semibold" style="font-size:13px">{{ store.name|default:store.domain }}</div>
               <small>
                 <a href="{{ store.url }}" target="_blank" class="text-muted text-decoration-none">
@@ -301,28 +387,16 @@
               </a>
             </td>
 
-            <!-- ── Colonna Contattato ── -->
+            <!-- Stato (badge solo, niente toggle) -->
             <td id="contact-cell-{{ store.pk }}">
               {% if store.status == 'contacted' or store.status == 'replied' or store.status == 'converted' %}
                 <span class="wa-badge badge-contacted" id="contact-badge-{{ store.pk }}">
                   ✅ {{ store.get_status_display }}
                 </span>
-                <button class="btn-toggle-contact is-contacted"
-                        id="contact-btn-{{ store.pk }}"
-                        onclick="toggleContacted({{ store.pk }}, false, this)"
-                        title="Segna come non contattato">
-                  <i class="bi bi-x-lg"></i> Annulla
-                </button>
               {% else %}
                 <span class="wa-badge badge-not-contacted" id="contact-badge-{{ store.pk }}">
                   ⬜ Non contattato
                 </span>
-                <button class="btn-toggle-contact"
-                        id="contact-btn-{{ store.pk }}"
-                        onclick="toggleContacted({{ store.pk }}, true, this)"
-                        title="Segna come contattato">
-                  <i class="bi bi-check-lg"></i> Segna
-                </button>
               {% endif %}
             </td>
 
@@ -346,24 +420,21 @@
       <p class="mb-0">
         {% if contacted_filter == 'yes' %}Nessuno store contattato ancora.
         {% elif contacted_filter == 'no' %}Tutti i trovati sono già stati contattati!
-        {% else %}Nessun numero trovato ancora.{% endif %}
+        {% else %}Nessun numero trovato ancora.
+        {% endif %}
       </p>
-      {% if not contacted_filter %}<small>Avvia l'analisi dalla tab Pending.</small>{% endif %}
     </div>
     {% endif %}
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     TAB: NON TROVATI
-════════════════════════════════════════════ -->
-<div class="wa-panel" id="panel-notfound">
+<!-- ══════ PANEL: NON TROVATI ══════ -->
+<div id="panel-notfound" class="wa-panel">
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+    <div class="card-header bg-white border-bottom">
       <h6 class="mb-0 fw-semibold">
         <i class="bi bi-x-circle text-danger me-1"></i>Store senza widget WhatsApp
       </h6>
-      <small class="text-muted">{{ total_not_found }} store</small>
     </div>
     {% if not_found %}
     <div class="table-responsive">
@@ -373,7 +444,6 @@
             <th class="ps-3">Store</th>
             <th>Nicchia</th>
             <th>Analizzato il</th>
-            <th>Stato</th>
             <th></th>
           </tr>
         </thead>
@@ -392,22 +462,17 @@
             <td>
               <small class="text-muted">{{ store.whatsapp_analyzed_at|date:"d/m/Y H:i" }}</small>
             </td>
-            <td>
-              <span class="wa-badge wa-badge-notfound" id="badge-{{ store.pk }}">❌ Non trovato</span>
-            </td>
             <td class="text-end pe-3">
-              <div class="d-flex gap-2 justify-content-end">
-                <button class="btn-wa-analyze"
-                        id="btn-{{ store.pk }}"
-                        onclick="analyzeStore({{ store.pk }}, this, true)"
-                        title="Ri-analizza">
-                  <i class="bi bi-arrow-clockwise"></i> Riprova
-                </button>
-                <a href="{% url 'stores:store_detail' store.pk %}"
-                   class="btn btn-sm btn-outline-secondary py-0">
-                  <i class="bi bi-eye"></i>
-                </a>
-              </div>
+              <button class="btn-wa-analyze"
+                      id="btn-{{ store.pk }}"
+                      onclick="analyzeStore({{ store.pk }}, this, true)"
+                      title="Rianalizza">
+                <i class="bi bi-arrow-repeat"></i> Riprova
+              </button>
+              <a href="{% url 'stores:store_detail' store.pk %}"
+                 class="btn btn-sm btn-outline-secondary py-0">
+                <i class="bi bi-eye"></i>
+              </a>
             </td>
           </tr>
           {% endfor %}
@@ -417,22 +482,24 @@
     {% else %}
     <div class="empty-state">
       <i class="bi bi-emoji-smile"></i>
-      <p class="mb-0">Nessuno store in questa categoria.</p>
+      <p class="mb-0">Nessuno store senza WhatsApp.</p>
     </div>
     {% endif %}
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     TAB: PENDING
-════════════════════════════════════════════ -->
-<div class="wa-panel" id="panel-pending">
+<!-- ══════ PANEL: IN ATTESA ══════ -->
+<div id="panel-pending" class="wa-panel">
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
       <h6 class="mb-0 fw-semibold">
-        <i class="bi bi-clock text-warning me-1"></i>Store non ancora analizzati
+        <i class="bi bi-hourglass-split text-primary me-1"></i>Store da analizzare
       </h6>
-      <small class="text-muted">{{ total_pending }} store</small>
+      {% if pending %}
+      <button class="btn btn-sm btn-primary" id="btn-analyze-all-wa" onclick="analyzeAllWa()">
+        <i class="bi bi-play-circle me-1"></i>Analizza tutti ({{ total_pending }})
+      </button>
+      {% endif %}
     </div>
     {% if pending %}
     <div class="table-responsive">
@@ -441,12 +508,11 @@
           <tr>
             <th class="ps-3">Store</th>
             <th>Nicchia</th>
-            <th>Aggiunto il</th>
             <th>Stato</th>
-            <th></th>
+            <th class="text-end pe-3">Azioni</th>
           </tr>
         </thead>
-        <tbody id="pending-tbody">
+        <tbody>
           {% for store in pending %}
           <tr id="row-{{ store.pk }}">
             <td class="ps-3">
@@ -459,10 +525,7 @@
             </td>
             <td><small class="text-muted">{{ store.get_niche_display }}</small></td>
             <td>
-              <small class="text-muted">{{ store.discovered_at|date:"d/m/Y" }}</small>
-            </td>
-            <td>
-              <span class="wa-badge wa-badge-pending" id="badge-{{ store.pk }}">⏳ Da analizzare</span>
+              <span class="wa-badge wa-badge-pending" id="badge-{{ store.pk }}">⏳ In attesa</span>
             </td>
             <td class="text-end pe-3">
               <div class="d-flex gap-2 justify-content-end">
@@ -491,6 +554,9 @@
   </div>
 </div>
 
+<!-- Toast -->
+<div id="wa-toast"></div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -508,55 +574,175 @@ function showTab(name, el) {
 }
 
 // ══════════════════════════════════════════════════════════
-// TOGGLE CONTATTATO — senza reload pagina
+// CHECKBOX SELECTION SYSTEM (Gmail-style)
 // ══════════════════════════════════════════════════════════
-async function toggleContacted(pk, markAsContacted, btn) {
-  btn.disabled = true;
-  const newStatus = markAsContacted ? 'contacted' : 'analyzed';
+
+let lastCheckedIndex = null;
+
+function getAllRowCbs() {
+  return Array.from(document.querySelectorAll('.wa-selectable-row .wa-row-cb'));
+}
+
+function getCheckedPks() {
+  return getAllRowCbs().filter(cb => cb.checked).map(cb => parseInt(cb.value));
+}
+
+function getCheckedCount() {
+  return getCheckedPks().length;
+}
+
+// Seleziona/deseleziona tutti
+function waToggleAll(checked) {
+  getAllRowCbs().forEach(cb => {
+    cb.checked = checked;
+    const row = cb.closest('tr');
+    if (row) row.classList.toggle('row-selected', checked);
+  });
+  waUpdateSelection();
+}
+
+// Deseleziona tutto
+function waDeselectAll() {
+  document.getElementById('wa-cb-all').checked = false;
+  getAllRowCbs().forEach(cb => {
+    cb.checked = false;
+    const row = cb.closest('tr');
+    if (row) row.classList.remove('row-selected');
+  });
+  waUpdateSelection();
+}
+
+// Aggiorna UI di selezione
+function waUpdateSelection() {
+  const cbs     = getAllRowCbs();
+  const checked = cbs.filter(cb => cb.checked);
+  const count   = checked.length;
+
+  // Highlight righe
+  cbs.forEach(cb => {
+    const row = cb.closest('tr');
+    if (row) row.classList.toggle('row-selected', cb.checked);
+  });
+
+  // Aggiorna contatore bulk bar
+  const bar      = document.getElementById('wa-selection-bar');
+  const countNum = document.getElementById('wa-bar-count-num');
+  countNum.textContent = count;
+
+  if (count > 0) {
+    bar.classList.add('show');
+  } else {
+    bar.classList.remove('show');
+  }
+
+  // Aggiorna checkbox "select all"
+  const cbAll = document.getElementById('wa-cb-all');
+  if (cbs.length > 0) {
+    cbAll.checked       = checked.length === cbs.length;
+    cbAll.indeterminate = checked.length > 0 && checked.length < cbs.length;
+  }
+}
+
+// Shift+click per selezione range
+document.addEventListener('click', function(e) {
+  const cb = e.target.closest('.wa-selectable-row .wa-row-cb');
+  if (!cb) return;
+
+  const allCbs = getAllRowCbs();
+  const currentIndex = allCbs.indexOf(cb);
+
+  if (e.shiftKey && lastCheckedIndex !== null && lastCheckedIndex !== currentIndex) {
+    const start = Math.min(lastCheckedIndex, currentIndex);
+    const end   = Math.max(lastCheckedIndex, currentIndex);
+    for (let i = start; i <= end; i++) {
+      allCbs[i].checked = true;
+    }
+  }
+
+  lastCheckedIndex = currentIndex;
+
+  // Delay per lasciare aggiornare lo stato del checkbox
+  setTimeout(() => waUpdateSelection(), 0);
+});
+
+// Escape per deselezionare
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && getCheckedCount() > 0) {
+    e.preventDefault();
+    waDeselectAll();
+  }
+});
+
+// ══════════════════════════════════════════════════════════
+// BULK CHANGE STATUS
+// ══════════════════════════════════════════════════════════
+
+async function bulkSetStatus(newStatus) {
+  const pks   = getCheckedPks();
+  const count = pks.length;
+
+  if (count === 0) return;
+
+  const label = newStatus === 'contacted' ? 'contattati' : 'non contattati';
+  if (!confirm(`Segnare ${count} store come ${label}?`)) return;
 
   try {
-    const res = await fetch(`/stores/${pk}/change-status/`, {
-      method:  'POST',
+    const res = await fetch('{% url "stores:bulk_change_status" %}', {
+      method: 'POST',
       headers: {
-        'X-CSRFToken':     CSRF_TOKEN,
-        'Content-Type':    'application/x-www-form-urlencoded',
-        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/json',
+        'X-CSRFToken':  CSRF_TOKEN,
       },
-      body: `status=${newStatus}`,
+      body: JSON.stringify({
+        store_ids: pks,
+        status:    newStatus,
+      }),
     });
 
-    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Errore sconosciuto');
 
-    const badge = document.getElementById('contact-badge-' + pk);
-    const row   = document.getElementById('row-' + pk);
+    if (data.ok) {
+      // Aggiorna badge e riga per ogni store
+      pks.forEach(pk => {
+        const badge = document.getElementById('contact-badge-' + pk);
+        const row   = document.getElementById('row-' + pk);
 
-    if (markAsContacted) {
-      // → diventa contattato
-      badge.className   = 'wa-badge badge-contacted';
-      badge.textContent = '✅ Contattato';
-      btn.className     = 'btn-toggle-contact is-contacted';
-      btn.innerHTML     = '<i class="bi bi-x-lg"></i> Annulla';
-      btn.onclick       = () => toggleContacted(pk, false, btn);
-      btn.title         = 'Segna come non contattato';
-      if (row) row.classList.add('row-contacted');
+        if (newStatus === 'contacted') {
+          if (badge) {
+            badge.className   = 'wa-badge badge-contacted';
+            badge.textContent = '✅ Contattato';
+          }
+          if (row) row.classList.add('row-contacted');
+        } else {
+          if (badge) {
+            badge.className   = 'wa-badge badge-not-contacted';
+            badge.textContent = '⬜ Non contattato';
+          }
+          if (row) row.classList.remove('row-contacted');
+        }
+      });
+
+      waDeselectAll();
+      showWaToast(`${data.updated} store aggiornati ✓`, 3000);
+
+      // Reload dopo un po' per aggiornare i contatori
+      setTimeout(() => location.reload(), 1500);
     } else {
-      // → torna non contattato
-      badge.className   = 'wa-badge badge-not-contacted';
-      badge.textContent = '⬜ Non contattato';
-      btn.className     = 'btn-toggle-contact';
-      btn.innerHTML     = '<i class="bi bi-check-lg"></i> Segna';
-      btn.onclick       = () => toggleContacted(pk, true, btn);
-      btn.title         = 'Segna come contattato';
-      if (row) row.classList.remove('row-contacted');
+      alert('Errore: ' + (data.error || 'Sconosciuto'));
     }
-  } catch (e) {
-    console.error('Toggle status error:', e);
-    alert('Errore nel cambio stato. Riprova.');
-  } finally {
-    btn.disabled = false;
+  } catch (err) {
+    alert('Errore di rete: ' + err.message);
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════
+function showWaToast(msg, duration) {
+  const toast = document.getElementById('wa-toast');
+  toast.textContent   = msg;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, duration || 3000);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -580,7 +766,15 @@ async function analyzeStore(pk, btn, force = false) {
 
   try {
     const url  = `/stores/${pk}/whatsapp-analyze/` + (force ? '?force=1' : '');
-    const res  = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } });
+    const res  = await fetch(url, {
+      method:  'POST',
+      headers: {
+        'X-CSRFToken':     CSRF_TOKEN,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
 
     if (!bulkRunning) banner.style.display = 'none';
@@ -589,14 +783,6 @@ async function analyzeStore(pk, btn, force = false) {
       if (badge) { badge.className = 'wa-badge wa-badge-found'; badge.textContent = '✅ ' + data.number; }
       btn.innerHTML = '<i class="bi bi-check-circle"></i> Trovato';
       btn.style.cssText = 'border-color:#25d366;color:#15803d;';
-      const td = badge ? badge.parentElement : null;
-      if (td && !td.querySelector('.wa-link')) {
-        const link = document.createElement('a');
-        link.href = data.whatsapp_url; link.target = '_blank';
-        link.className = 'wa-link ms-2';
-        link.innerHTML = '<i class="bi bi-whatsapp"></i> Apri';
-        td.appendChild(link);
-      }
     } else if (data.status === 'not_found') {
       if (badge) { badge.className = 'wa-badge wa-badge-notfound'; badge.textContent = '❌ Non trovato'; }
       btn.innerHTML = '<i class="bi bi-x-circle"></i> Non trovato';
@@ -612,24 +798,21 @@ async function analyzeStore(pk, btn, force = false) {
     }
   } catch (e) {
     if (!bulkRunning) banner.style.display = 'none';
-    if (badge) { badge.className = 'wa-badge wa-badge-error'; badge.textContent = '⚠️ Errore rete'; }
+    if (badge) { badge.className = 'wa-badge wa-badge-error'; badge.textContent = '⚠️ Errore'; }
     btn.disabled  = false;
-    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Riprova';
-    console.error(e);
+    btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Errore';
+    console.error('WA analyze error:', e);
   }
 }
 
 // ══════════════════════════════════════════════════════════
-// ANALISI BULK — tutti i pending
+// ANALISI BULK WhatsApp
 // ══════════════════════════════════════════════════════════
-let bulkTotal = 0;
-let bulkDone  = 0;
+let bulkTotal = 0, bulkDone = 0;
 
-async function analyzeAllPending() {
-  if (bulkRunning) return;
-
-  const buttons = [...document.querySelectorAll('#pending-tbody .btn-wa-analyze:not(:disabled)')];
-  if (!buttons.length) { alert('Nessun pending da analizzare.'); return; }
+async function analyzeAllWa() {
+  const buttons = Array.from(document.querySelectorAll('#panel-pending .btn-wa-analyze'));
+  if (!buttons.length) { alert('Nessuno store da analizzare.'); return; }
 
   bulkRunning = true;
   bulkTotal   = buttons.length;
