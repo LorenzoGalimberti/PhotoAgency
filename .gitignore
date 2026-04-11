@@ -1,3 +1,4 @@
 media/reports/
 ~$*.xlsx
-~$*.xlsdb.sqlite3
+~$*.xls
+db.sqlite3
